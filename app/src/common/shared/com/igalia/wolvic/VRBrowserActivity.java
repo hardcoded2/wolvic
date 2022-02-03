@@ -98,7 +98,7 @@ import java.util.function.Consumer;
 
 import static com.igalia.wolvic.ui.widgets.UIWidget.REMOVE_WIDGET;
 
-public class VRBrowserActivity extends PlatformActivity implements WidgetManagerDelegate, ComponentCallbacks2, LifecycleOwner, ViewModelStoreOwner {
+public class VRBrowserActivity extends com.igalia.wolvic.PlatformActivity implements WidgetManagerDelegate, ComponentCallbacks2, LifecycleOwner, ViewModelStoreOwner {
 
     private BroadcastReceiver mCrashReceiver = new BroadcastReceiver() {
         @Override
@@ -549,6 +549,11 @@ public class VRBrowserActivity extends PlatformActivity implements WidgetManager
         SendTabDialogWidget.getInstance(this).onConfigurationChanged(newConfig);
 
         super.onConfigurationChanged(newConfig);
+    }
+
+    @Override
+    public void onLowMemory() {
+        //TODO: asink: figure out the right method to call
     }
 
     void loadFromIntent(final Intent intent) {
