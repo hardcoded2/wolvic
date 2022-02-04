@@ -10,6 +10,16 @@ apply plugin: "org.mozilla.telemetry.glean-gradle-plugin"
 apply plugin: 'com.huawei.agconnect'
 
 deps.telemetry.glean_unittests = "org.mozilla.telemetry:glean-forUnitTests:$project.ext.glean_version"
+allprojects {
+    repositories {
+        google()
+        jcenter()
+        maven {
+            // assign your wavevr local respository
+            url "/g/vivestudios/411sdk/wave_4.3.0_native"
+        }
+    }
+}
 
 def getGitHash = { ->
     def stdout = new ByteArrayOutputStream()
@@ -378,7 +388,7 @@ android {
             res.srcDirs = [
                     'src/wavevr/res'
             ]
-            jniLibs.srcDirs = ["${project.rootDir}/third_party/wavesdk/build/wvr_client-${versions.wavevr}/jni"]
+            //jniLibs.srcDirs = ["${project.rootDir}/third_party/wavesdk/build/wvr_client-${versions.wavevr}/jni"]
         }
 
         wavevrStore {
@@ -564,6 +574,7 @@ dependencies {
     def branch = "nightly"
     arm64Implementation deps.gecko_view."${branch}_arm64"
     x86_64Implementation deps.gecko_view."${branch}_x86_64"
+
 
     wavevrImplementation files('E:\\vivestudios\\externalProjects\\wolvic_ffr_new_owners\\third_party\\wavesdk\\build\\wvr.common.utils-4.3.0-u05.aar')
     wavevrImplementation files('E:\\vivestudios\\externalProjects\\wolvic_ffr_new_owners\\third_party\\wavesdk\\build\\vr.client.abi-4.3.0-u05.aar')
