@@ -17,6 +17,7 @@ allprojects {
         maven {
             // assign your wavevr local respository
             url "/g/vivestudios/411sdk/wave_4.3.0_native"
+            //url "third_party/waverepo"
         }
     }
 }
@@ -560,10 +561,12 @@ if (findProject(':servo')) {
     }
 }
 
-if (findProject(':wavesdk')) {
+//asink: hack to get building working again
+if(true) {
+//if (findProject(':wavesdk')) {
     dependencies {
-        wavevrImplementation fileTree(dir: "${project.rootDir}/third_party/wavesdk/", include: ['*.aar'])
-        wavevrStoreImplementation fileTree(dir: "${project.rootDir}/third_party/wavesdk/", include: ['*.aar'])
+        wavevrImplementation fileTree(dir: "${project.rootDir}/third_party/wavesdk/build/", include: ['*.aar'])
+        wavevrStoreImplementation fileTree(dir: "${project.rootDir}/third_party/wavesdk/build/", include: ['*.aar'])
     }
 }
 
@@ -574,21 +577,6 @@ dependencies {
     def branch = "nightly"
     arm64Implementation deps.gecko_view."${branch}_arm64"
     x86_64Implementation deps.gecko_view."${branch}_x86_64"
-
-
-    wavevrImplementation files('E:\\vivestudios\\externalProjects\\wolvic_ffr_new_owners\\third_party\\wavesdk\\build\\wvr.common.utils-4.3.0-u05.aar')
-    wavevrImplementation files('E:\\vivestudios\\externalProjects\\wolvic_ffr_new_owners\\third_party\\wavesdk\\build\\vr.client.abi-4.3.0-u05.aar')
-    wavevrImplementation files('E:\\vivestudios\\externalProjects\\wolvic_ffr_new_owners\\third_party\\wavesdk\\build\\wvr_client-4.3.0-u05.aar')
-    wavevrImplementation files('E:\\vivestudios\\externalProjects\\wolvic_ffr_new_owners\\third_party\\wavesdk\\build\\wvr_ime_client-4.3.0-u05.aar')
-    wavevrImplementation files('E:\\vivestudios\\externalProjects\\wolvic_ffr_new_owners\\third_party\\wavesdk\\build\\wvr_permission_client-4.3.0-u05.aar')
-/*
-    wavevrStoreImplementation files('G:\\vivestudios\\samples\\FF2\\third_party\\wavesdk\\build\\wvr.common.utils-4.3.0-u05.aar')
-    wavevrStoreImplementation files('G:\\vivestudios\\samples\\FF2\\third_party\\wavesdk\\build\\vr.client.abi-4.3.0-u05.aar')
-    wavevrStoreImplementation files('G:\\vivestudios\\samples\\FF2\\third_party\\wavesdk\\build\\wvr_client-4.3.0-u05.aar')
-    wavevrStoreImplementation files('G:\\vivestudios\\samples\\FF2\\third_party\\wavesdk\\build\\wvr_ime_client-4.3.0-u05.aar')
-    wavevrStoreImplementation files('G:\\vivestudios\\samples\\FF2\\third_party\\wavesdk\\build\\wvr_permission_client-4.3.0-u05.aar')
-
- */
 }
 
 if (gradle.hasProperty('geckoViewLocalArm') || gradle.hasProperty('geckoViewLocalX86')) {
