@@ -12,7 +12,7 @@ jobs:
 
     strategy:
       matrix:
-        flavour: [assembleWavevrArm64Release]
+        flavour: [assembleWavevrArm64Debug]
 
     steps:
       - name: Checkout Wolvic
