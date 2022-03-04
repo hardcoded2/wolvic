@@ -36,6 +36,7 @@ def getDevApplicationIdSuffix = { ->
 
 def getUseDebugSigningOnRelease = {
     /*
+    //asink: to let builds happen on external machine without managing secrets
     if (gradle.hasProperty("userProperties.useDebugSigningOnRelease")) {
         return gradle."userProperties.useDebugSigningOnRelease" == "true"
     }
@@ -146,7 +147,7 @@ android {
     }
 
     lintOptions {
-        disable "ExtraTranslation"
+        disable "ExtraTranslation", "Instantiatable"
     }
 
     flavorDimensions "platform", "abi"
