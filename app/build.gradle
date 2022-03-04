@@ -16,8 +16,7 @@ allprojects {
         jcenter()
         maven {
             // assign your wavevr local respository
-            url "/g/vivestudios/411sdk/wave_4.3.0_native"
-            //url "third_party/waverepo"
+            url "third_party/waverepo"
         }
     }
 }
