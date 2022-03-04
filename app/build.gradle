@@ -10,16 +10,6 @@ apply plugin: "org.mozilla.telemetry.glean-gradle-plugin"
 apply plugin: 'com.huawei.agconnect'
 
 deps.telemetry.glean_unittests = "org.mozilla.telemetry:glean-forUnitTests:$project.ext.glean_version"
-allprojects {
-    repositories {
-        google()
-        jcenter()
-        maven {
-            // assign your wavevr local respository
-            url "third_party/waverepo"
-        }
-    }
-}
 
 def getGitHash = { ->
     def stdout = new ByteArrayOutputStream()
