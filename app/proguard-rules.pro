@@ -54,6 +54,8 @@
 -keep class com.igalia.wolvic.browser.engine.** {*;} # Keep state clases used by gson.
 -keep class com.igalia.wolvic.utils.RemoteProperties {*;} # Keep state clases used by gson.
 -keep class com.igalia.wolvic.utils.Environment {*;} # Keep state clases used by gson.
+#seems to break htc stuff if not explicitly allowed
+-keep class com.igalia.wolvic.VRBrowserActivity {*;} # Keep state clases used by gson.
 
 # --------------------------------------------------------------------
 # Keep classes from HTC SDK
