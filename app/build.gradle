@@ -199,7 +199,7 @@ android {
                     arguments "-DVR_SDK_LIB=wavevr-lib", "-DWAVEVR=ON", "-DWAVE_SDK_VERSION=${versions.wavevr}"
                 }
             }
-            //applicationIdSuffix ".internal"
+            applicationIdSuffix ".internal"
         }
 
         wavevrStore {
