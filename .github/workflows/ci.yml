@@ -47,7 +47,7 @@ jobs:
       - name: Build ${{ matrix.flavour }} Flavour
         uses: gradle/gradle-build-action@v2
         with:
-          arguments: ${{ matrix.flavour }}
+          arguments: ${{ matrix.flavour }} --debug
 
       - name: 'Upload Artifact'
         uses: actions/upload-artifact@v2
