@@ -408,7 +408,7 @@ android {
             assets.srcDirs = [
                     'src/wavevr/assets'
             ]
-            jniLibs.srcDirs = ["${project.rootDir}/third_party/wavesdk/build/wvr_client-${versions.wavevr}/jni"]
+            //jniLibs.srcDirs = ["${project.rootDir}/third_party/wavesdk/build/wvr_client-${versions.wavevr}/jni"]
             manifest.srcFile "src/wavevr/AndroidManifest.xml"
         }
 
