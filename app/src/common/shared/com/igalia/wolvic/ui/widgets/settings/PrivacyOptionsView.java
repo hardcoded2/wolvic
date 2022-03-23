@@ -68,8 +68,6 @@ class PrivacyOptionsView extends SettingsView {
         mBinding.footerLayout.setFooterButtonClickListener(v -> resetOptions());
 
         // Options
-        mBinding.showTermsButton.setOnClickListener(v -> mDelegate.showView(SettingViewType.TERMS_OF_SERVICE));
-
         mBinding.showPrivacyButton.setOnClickListener(v -> mDelegate.showView(SettingViewType.PRIVACY_POLICY));
 
         mBinding.clearCookiesSite.setOnClickListener(v -> {
@@ -90,7 +88,7 @@ class PrivacyOptionsView extends SettingsView {
         mPermissionButtons.add(Pair.create(findViewById(R.id.cameraPermissionSwitch), Manifest.permission.CAMERA));
         mPermissionButtons.add(Pair.create(findViewById(R.id.microphonePermissionSwitch), Manifest.permission.RECORD_AUDIO));
         mPermissionButtons.add(Pair.create(findViewById(R.id.locationPermissionSwitch), Manifest.permission.ACCESS_FINE_LOCATION));
-        mPermissionButtons.add(Pair.create(findViewById(R.id.storagePermissionSwitch), Manifest.permission.WRITE_EXTERNAL_STORAGE));
+        mPermissionButtons.add(Pair.create(findViewById(R.id.storagePermissionSwitch), Manifest.permission.READ_EXTERNAL_STORAGE));
 
         if (DeviceType.isOculusBuild() || DeviceType.isWaveBuild() || DeviceType.isPicoVR()) {
             findViewById(R.id.cameraPermissionSwitch).setVisibility(View.GONE);
@@ -154,6 +152,10 @@ class PrivacyOptionsView extends SettingsView {
         mBinding.trackingProtectionRadio.setOnCheckedChangeListener(mTrackingProtectionListener);
         setTrackingProtection(mBinding.trackingProtectionRadio.getIdForValue(etpLevel), false);
 
+        @SettingsStore.Storage int downloadsStorage = SettingsStore.getInstance(getContext()).getDownloadsStorage();
+        mBinding.downloadsStorage.setOnCheckedChangeListener(mDownloadsStorageListener);
+        setDownloadsStorage(mBinding.downloadsStorage.getIdForValue(downloadsStorage), false);
+
         mBinding.loginsAndPasswords.setOnClickListener(view -> mDelegate.showView(SettingViewType.LOGINS_AND_PASSWORDS));
     }
 
@@ -216,6 +218,10 @@ class PrivacyOptionsView extends SettingsView {
         setWebXR(value, doApply);
     };
 
+    private RadioGroupSetting.OnCheckedChangeListener mDownloadsStorageListener = (radioGroup, checkedId, doApply) -> {
+        setDownloadsStorage(checkedId, true);
+    };
+
     private void resetOptions() {
         if (mBinding.drmContentPlaybackSwitch.isChecked() != SettingsStore.DRM_PLAYBACK_DEFAULT) {
             setDrmContent(SettingsStore.DRM_PLAYBACK_DEFAULT, true);
@@ -256,6 +262,10 @@ class PrivacyOptionsView extends SettingsView {
 
         if (mBinding.webxrSwitch.isChecked() != SettingsStore.WEBXR_ENABLED_DEFAULT) {
             setWebXR(SettingsStore.WEBXR_ENABLED_DEFAULT, true);
+        }
+
+        if (!mBinding.downloadsStorage.getValueForId(mBinding.downloadsStorage.getCheckedRadioButtonId()).equals(SettingsStore.DOWNLOADS_STORAGE_DEFAULT)) {
+            setDownloadsStorage(mBinding.downloadsStorage.getIdForValue(SettingsStore.DOWNLOADS_STORAGE_DEFAULT), true);
         }
     }
 
@@ -360,6 +370,14 @@ class PrivacyOptionsView extends SettingsView {
                 window.getSession().reload(WSession.LOAD_FLAGS_BYPASS_CACHE);
             }
         }
+    }
+
+    private void setDownloadsStorage(int checkId, boolean doApply) {
+        mBinding.downloadsStorage.setOnCheckedChangeListener(null);
+        mBinding.downloadsStorage.setChecked(checkId, doApply);
+        mBinding.downloadsStorage.setOnCheckedChangeListener(mDownloadsStorageListener);
+
+        SettingsStore.getInstance(getContext()).setDownloadsStorage((Integer)mBinding.downloadsStorage.getValueForId(checkId));
     }
 
     @Override
