@@ -178,7 +178,7 @@ struct ExternalVR::State {
   void PullBrowserStateWhileLocked() {
     const bool wasPresenting = IsPresenting();
     memcpy(&browser, sourceBrowserState, sizeof(mozilla::gfx::VRBrowserState));
-
+    browser.detectRuntimesOnly = true; //ASINK: HACK
 
     if ((!wasPresenting && IsPresenting()) || browser.navigationTransitionActive) {
       firstPresentingFrame = true;
