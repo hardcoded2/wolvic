@@ -576,7 +576,10 @@ DeviceDelegateWaveVR::SetRenderMode(const device::RenderMode aMode) {
   m.reorientMatrix = vrb::Matrix::Identity();
 
   uint32_t recommendedWidth, recommendedHeight;
-  WVR_GetRenderTargetSize(&recommendedWidth, &recommendedHeight);
+  //WVR_GetRenderTargetSize(&recommendedWidth, &recommendedHeight);
+  //ASINK HACK: render target width/height set to similar device output
+  recommendedWidth = 1920;
+  recommendedHeight = 1832;
   if (recommendedWidth != m.renderWidth || recommendedHeight != m.renderHeight) {
     m.renderWidth = recommendedWidth;
     m.renderHeight = recommendedHeight;
