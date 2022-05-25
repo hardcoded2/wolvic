@@ -16,10 +16,6 @@
 
 
 
-/**
- * Shared file between builds so that they can all use the same dependencies and
- * maven repositories.
- **/
 ext.deps = [:]
 def versions = [:]
 // GeckoView versions can be found here:
@@ -101,6 +97,10 @@ def app_services = [:]
 app_services.rustlog = "org.mozilla.appservices:rustlog:${versions.mozilla_appservices}"
 deps.app_services = app_services
 
+def mozilla_speech = [:]
+mozilla_speech.library = "com.github.mozilla:mozillaspeechlibrary:$versions.mozilla_speech"
+mozilla_speech.utils = "com.github.mozilla:mozillaspeechutils:$versions.mozilla_speech"
+deps.mozilla_speech = mozilla_speech
 
 deps.openwnn = "jp.co.omronsoft.openwnn:openwnn:$versions.openwnn"
 
