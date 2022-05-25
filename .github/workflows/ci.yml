@@ -52,9 +52,9 @@ jobs:
       - name: manually copy correct pings.kt file
         run: |
           mkdir -p app/build/generated/source/glean/wavevrArm64/debug/kotlin
-          cp -f buildworkaround/Pings.kt app/build/generated/source/glean/wavevrArm64/debug/kotlin/Pings.kotlin
+          cp -f buildworkaround/Pings.kt app/build/generated/source/glean/wavevrArm64/debug/kotlin/Pings.kt
           mkdir -p app/build/generated/source/glean/wavevrArm64/release/kotlin
-          cp -f buildworkaround/Pings.kt app/build/generated/source/glean/wavevrArm64/release/kotlin/Pings.kotlin
+          cp -f buildworkaround/Pings.kt app/build/generated/source/glean/wavevrArm64/release/kotlin/Pings.kt
 
       - name: Build ${{ matrix.flavour }} Flavour after fixing build
         uses: gradle/gradle-build-action@v2
