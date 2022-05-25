@@ -44,10 +44,23 @@ jobs:
         with:
           gradle-version: 7.3.2
 
-      - name: Build ${{ matrix.flavour }} Flavour
+      - name: Build ${{ matrix.flavour }} Flavour - may fail due to codegen
+        uses: gradle/gradle-build-action@v2
+        continue-on-error: true
+        with:
+          arguments: ${{ matrix.flavour }}
+      - name: manually copy correct pings.kt file
+        run: |
+          mkdir -p app/build/generated/source/glean/wavevrArm64/debug/kotlin
+          cp -f buildworkaround/Pings.kt app/build/generated/source/glean/wavevrArm64/debug/kotlin/Pings.kotlin
+          mkdir -p app/build/generated/source/glean/wavevrArm64/release/kotlin
+          cp -f buildworkaround/Pings.kt app/build/generated/source/glean/wavevrArm64/release/kotlin/Pings.kotlin
+
+      - name: Build ${{ matrix.flavour }} Flavour after fixing build
         uses: gradle/gradle-build-action@v2
         with:
           arguments: ${{ matrix.flavour }}
+
 
       - name: 'Upload Artifact'
         uses: actions/upload-artifact@v2
