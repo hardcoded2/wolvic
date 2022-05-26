@@ -12,7 +12,7 @@ jobs:
 
     strategy:
       matrix:
-        flavour: [ assembleWavevrArm64Debug ] #, assembleWavevrStoreArm64Release]
+        flavour: [ WavevrArm64Debug ] #, WavevrStoreArm64Release]
 
     steps:
       - name: Checkout Wolvic
@@ -48,18 +48,22 @@ jobs:
         uses: gradle/gradle-build-action@v2
         continue-on-error: true
         with:
-          arguments: ${{ matrix.flavour }}
+          arguments: gleanGenerateMetricsSourceFor${{ matrix.flavour }} --info
       - name: manually copy correct pings.kt file
+        continue-on-error: true
         run: |
-          mkdir -p app/build/generated/source/glean/wavevrArm64/debug/kotlin
+#          mkdir -p app/build/generated/source/glean/wavevrArm64/debug/kotlin
           cp -f buildworkaround/Pings.kt app/build/generated/source/glean/wavevrArm64/debug/kotlin/Pings.kt
-          mkdir -p app/build/generated/source/glean/wavevrStoreArm64/release/kotlin
-          cp -f buildworkaround/Pings.kt app/build/generated/source/glean/wavevrStoreArm64/release/kotlin/Pings.kt
+      - name: manually copy correct pings.kt file 2
+        continue-on-error: true
+        run: |
+#          mkdir -p app/build/generated/source/glean/wavevrArm64/release/kotlin
+          cp -f buildworkaround/Pings.kt app/build/generated/source/glean/wavevrArm64/release/kotlin/Pings.kt
 
       - name: Build ${{ matrix.flavour }} Flavour after fixing build
         uses: gradle/gradle-build-action@v2
         with:
-          arguments: ${{ matrix.flavour }}
+          arguments: ${{ matrix.flavour }} --info
 
 
       - name: 'Upload Artifact'
