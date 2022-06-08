@@ -77,6 +77,7 @@ import com.igalia.wolvic.ui.widgets.WidgetPlacement;
 import com.igalia.wolvic.ui.widgets.WindowWidget;
 import com.igalia.wolvic.ui.widgets.Windows;
 import com.igalia.wolvic.ui.widgets.dialogs.CrashDialogWidget;
+import com.igalia.wolvic.ui.widgets.dialogs.LegalDocumentDialogWidget;
 import com.igalia.wolvic.ui.widgets.dialogs.PromptDialogWidget;
 import com.igalia.wolvic.ui.widgets.dialogs.SendTabDialogWidget;
 import com.igalia.wolvic.ui.widgets.dialogs.WhatsNewWidget;
@@ -382,12 +383,11 @@ public class VRBrowserActivity extends PlatformActivity implements WidgetManager
 
         addWidgets(Arrays.asList(mRootWidget, mNavigationBar, mKeyboard, mTray, mWebXRInterstitial));
 
-        // Show the what's upp dialog if we haven't showed it yet and this is v6.
-        if (!SettingsStore.getInstance(this).isWhatsNewDisplayed()) {
-            mWhatsNewWidget = new WhatsNewWidget(this);
-            mWhatsNewWidget.setLoginOrigin(Accounts.LoginOrigin.NONE);
-            mWhatsNewWidget.getPlacement().parentHandle = mWindows.getFocusedWindow().getHandle();
-            mWhatsNewWidget.show(UIWidget.REQUEST_FOCUS);
+        // Show the launch dialogs, if needed.
+        if (!showTermsServiceDialogIfNeeded()) {
+            if (!showPrivacyDialogIfNeeded()) {
+                showWhatsNewDialogIfNeeded();
+            }
         }
 
         mWindows.restoreSessions();
@@ -408,6 +408,65 @@ public class VRBrowserActivity extends PlatformActivity implements WidgetManager
 
     WRuntime.CrashReportIntent getCrashReportIntent() {
         return EngineProvider.INSTANCE.getOrCreateRuntime(this).getCrashReportIntent();
+    }
+
+    // Returns true if the dialog was shown, false otherwise.
+    private boolean showTermsServiceDialogIfNeeded() {
+        if (SettingsStore.getInstance(this).isTermsServiceAccepted()) {
+            return false;
+        }
+
+        LegalDocumentDialogWidget termsServiceDialog =
+                new LegalDocumentDialogWidget(this, LegalDocumentDialogWidget.LegalDocument.TERMS_OF_SERVICE);
+
+        termsServiceDialog.setDelegate(response -> {
+            if (response) {
+                SettingsStore.getInstance(this).setTermsServiceAccepted(true);
+                if (!showPrivacyDialogIfNeeded()) {
+                    showWhatsNewDialogIfNeeded();
+                }
+            } else {
+                // TODO ask for confirmation ("are you really sure that you want to close Wolvic?")
+                Log.w(LOGTAG, "The user rejected the privacy policy, closing the app.");
+                finish();
+            }
+        });
+        termsServiceDialog.attachToWindow(mWindows.getFocusedWindow());
+        termsServiceDialog.show(UIWidget.REQUEST_FOCUS);
+        return true;
+    }
+
+    // Returns true if the dialog was shown, false otherwise.
+    private boolean showPrivacyDialogIfNeeded() {
+        if (SettingsStore.getInstance(this).isPrivacyPolicyAccepted()) {
+            return false;
+        }
+
+        LegalDocumentDialogWidget privacyPolicyDialog
+                = new LegalDocumentDialogWidget(this, LegalDocumentDialogWidget.LegalDocument.PRIVACY_POLICY);
+        privacyPolicyDialog.setDelegate(response -> {
+            if (response) {
+                SettingsStore.getInstance(this).setPrivacyPolicyAccepted(true);
+                showWhatsNewDialogIfNeeded();
+            } else {
+                // TODO ask for confirmation ("are you really sure that you want to close Wolvic?")
+                Log.w(LOGTAG, "The user rejected the privacy policy, closing the app.");
+                finish();
+            }
+        });
+        privacyPolicyDialog.attachToWindow(mWindows.getFocusedWindow());
+        privacyPolicyDialog.show(UIWidget.REQUEST_FOCUS);
+        return true;
+    }
+
+    private void showWhatsNewDialogIfNeeded() {
+        if (SettingsStore.getInstance(this).isWhatsNewDisplayed()) {
+            return;
+        }
+        mWhatsNewWidget = new WhatsNewWidget(this);
+        mWhatsNewWidget.setLoginOrigin(Accounts.LoginOrigin.NONE);
+        mWhatsNewWidget.getPlacement().parentHandle = mWindows.getFocusedWindow().getHandle();
+        mWhatsNewWidget.show(UIWidget.REQUEST_FOCUS);
     }
 
     @Override
