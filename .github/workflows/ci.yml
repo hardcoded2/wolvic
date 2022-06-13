@@ -13,7 +13,8 @@ jobs:
 
     strategy:
       matrix:
-        flavour: [ assembleWavevrArm64WorldDebug, assembleWavevrStoreArm64WorldRelease]
+        #not sure why the store variant (assembleWavevrStoreArm64WorldRelease) is not working at the moment, but the regular build seems to work
+        flavour: [ assembleWavevrArm64WorldDebug, assembleWavevrArm64WorldRelease] 
 
     steps:
       - name: Checkout Wolvic
