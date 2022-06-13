@@ -147,6 +147,10 @@ android {
 
     lintOptions {
         disable "ExtraTranslation"
+        checkReleaseBuilds false
+        // Or, if you prefer, you can continue to check for errors in release builds,
+        // but continue the build even when errors are found:
+        abortOnError false
     }
 
     flavorDimensions "platform", "abi"
@@ -554,8 +558,21 @@ if (findProject(':servo')) {
 if(true) {
 //if (findProject(':wavesdk')) {
     dependencies {
-        wavevrImplementation fileTree(dir: "${project.rootDir}/third_party/wavesdk/build/", include: ['*.aar'])
-        wavevrStoreImplementation fileTree(dir: "${project.rootDir}/third_party/wavesdk/build/", include: ['*.aar'])
+        wavevrImplementation files("${project.rootDir}/third_party/wavesdk/common/wvr.common.utils/${versions.wavevr}/wvr.common.utils-${versions.wavevr}.aar")
+        wavevrImplementation files("${project.rootDir}/third_party/wavesdk/vr.client.abi/${versions.wavevr}/vr.client.abi-${versions.wavevr}.aar")
+        wavevrImplementation files("${project.rootDir}/third_party/wavesdk/wvr_client/${versions.wavevr}/wvr_client-${versions.wavevr}.aar")
+        wavevrImplementation files("${project.rootDir}/third_party/wavesdk/wvr_ime_client/${versions.wavevr}/wvr_ime_client-${versions.wavevr}.aar")
+        wavevrImplementation files("${project.rootDir}/third_party/wavesdk/wvr_permission_client/${versions.wavevr}/wvr_permission_client-${versions.wavevr}.aar")
+
+        wavevrStoreImplementation files("${project.rootDir}/third_party/wavesdk/common/wvr.common.utils/${versions.wavevr}/wvr.common.utils-${versions.wavevr}.aar")
+        wavevrStoreImplementation files("${project.rootDir}/third_party/wavesdk/vr.client.abi/${versions.wavevr}/vr.client.abi-${versions.wavevr}.aar")
+        wavevrStoreImplementation files("${project.rootDir}/third_party/wavesdk/wvr_client/${versions.wavevr}/wvr_client-${versions.wavevr}.aar")
+        wavevrStoreImplementation files("${project.rootDir}/third_party/wavesdk/wvr_ime_client/${versions.wavevr}/wvr_ime_client-${versions.wavevr}.aar")
+        wavevrStoreImplementation files("${project.rootDir}/third_party/wavesdk/wvr_permission_client/${versions.wavevr}/wvr_permission_client-${versions.wavevr}.aar")
+
+
+        //wavevrImplementation fileTree(dir: "${project.rootDir}/third_party/wavesdk/build/", include: ['*.aar'])
+        //wavevrStoreImplementation fileTree(dir: "${project.rootDir}/third_party/wavesdk/build/", include: ['*.aar'])
     }
 }
 
