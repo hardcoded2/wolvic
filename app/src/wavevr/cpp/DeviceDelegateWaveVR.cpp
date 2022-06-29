@@ -392,8 +392,8 @@ struct DeviceDelegateWaveVR::State {
         }
       }
 
-      const bool touchpadPressed = WVR_GetInputButtonState(controller.type, WVR_InputId_Alias1_Touchpad);
-      const bool touchpadTouched = WVR_GetInputTouchState(controller.type, WVR_InputId_Alias1_Touchpad);
+      const bool touchpadPressed = renderMode == device::RenderMode::Immersive;//WVR_GetInputButtonState(controller.type, WVR_InputId_Alias1_Touchpad);
+      const bool touchpadTouched = renderMode == device::RenderMode::Immersive;//WVR_GetInputTouchState(controller.type, WVR_InputId_Alias1_Touchpad);
       const bool menuPressed = WVR_GetInputButtonState(controller.type, WVR_InputId_Alias1_Menu);
 
       // Although Focus only has two buttons, in order to match WebXR input profile (squeeze placeholder),
