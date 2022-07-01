@@ -156,7 +156,8 @@ struct DeviceDelegateWaveVR::State {
       deviceType = device::ViveFocusPlus;
     } else {
       if(magicDetectDeviceIfItsFlow){
-        deviceType = device::ViveFlow;
+        //deviceType = device::ViveFlow;
+          deviceType = device::ViveFocus;
       }else{
         deviceType = device::ViveFocus;
       }
@@ -1016,14 +1017,19 @@ vrb::LoadTask DeviceDelegateWaveVR::GetControllerModelTask(int32_t aModelIndex) 
 
   return [this, aModelIndex](vrb::CreationContextPtr& aContext) -> vrb::GroupPtr {
       vrb::GroupPtr root = vrb::Group::Create(aContext);
-      auto hand = aModelIndex == 0 ? ElbowModel::HandEnum::Right : ElbowModel::HandEnum::Left; // the index is the opposite of the way these are created, where index0 is right and index1 is left in the constructor
-      if(this->GetDeviceType() == device::ViveFlow){
-        hand = ElbowModel::HandEnum::Right;
+      auto hand = static_cast<ElbowModel::HandEnum>(aModelIndex);
+      if(this->GetDeviceType() == device::ViveFocus){
+        hand = aModelIndex == 0 ? ElbowModel::HandEnum::Right : ElbowModel::HandEnum::Left; // the index is the opposite of the way these are created, where index0 is right and index1 is left in the constructor
       }
+
       // Load controller model from SDK
       VRB_LOG("[WaveVR] (%p) Loading internal controller model: %d", this, aModelIndex);
 
       WVR_DeviceType mCtrlerType = hand == ElbowModel::HandEnum::Left ? WVR_DeviceType_Controller_Left : WVR_DeviceType_Controller_Right;
+      if(this->GetDeviceType() == device::ViveFocus){ //FIXME: should be device::ViveFlow
+      //if(true){
+          mCtrlerType = WVR_DeviceType_Controller_Right;
+      }
       {//Critical Section: Clear flag and cached parsed data.
         std::lock_guard<std::mutex> lockGuard(m.mCachedDataMutex[aModelIndex]);
         if (m.modelCachedData[aModelIndex] != nullptr) {
