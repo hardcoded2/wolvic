@@ -151,7 +151,7 @@ struct DeviceDelegateWaveVR::State {
       }
     }
     if (sixDoFControllerCount) {
-        deviceType = device::ViveFocusPlus;
+      deviceType = device::ViveFocusPlus;
     } else {
       deviceType = device::ViveFocus;
     }
@@ -1000,7 +1000,6 @@ DeviceDelegateWaveVR::EndFrame(const FrameEndMode aMode) {
 }
 
 vrb::LoadTask DeviceDelegateWaveVR::GetControllerModelTask(int32_t aModelIndex) {
-    VRB_LOG("[WaveVR] (%p) Loading internal controller model: %d", this, aModelIndex);
   vrb::RenderContextPtr localContext = m.context.lock();
   if (!localContext) {
     return nullptr;
@@ -1008,8 +1007,7 @@ vrb::LoadTask DeviceDelegateWaveVR::GetControllerModelTask(int32_t aModelIndex) 
 
   return [this, aModelIndex](vrb::CreationContextPtr& aContext) -> vrb::GroupPtr {
       vrb::GroupPtr root = vrb::Group::Create(aContext);
-      //auto hand = static_cast<ElbowModel::HandEnum>(aModelIndex == 0 ? );
-      auto hand = aModelIndex == 0 ? ElbowModel::HandEnum::Right : ElbowModel::HandEnum::Left;
+      auto hand = aModelIndex == 0 ? ElbowModel::HandEnum::Right : ElbowModel::HandEnum::Left; // the index is the opposite of the way these are created, where index0 is right and index1 is left in the constructor
 
       // Load controller model from SDK
       VRB_LOG("[WaveVR] (%p) Loading internal controller model: %d", this, aModelIndex);
