@@ -42,7 +42,7 @@
 namespace crow {
 
 static const vrb::Vector kAverageHeight(0.0f, 1.7f, 0.0f);
-static const int32_t kMaxControllerCount = 2;
+static const int32_t kMaxControllerCount = 1;
 static const int32_t kRecenterDelay = 72;
 
 struct DeviceDelegateWaveVR::State {
@@ -136,7 +136,7 @@ struct DeviceDelegateWaveVR::State {
     memset((void*)modelCachedData, 0, sizeof(WVR_CtrlerModel_t) * 2);
     memset((void*)isModelDataReady, 0, sizeof(bool) * WVR_DEVICE_COUNT_LEVEL_1);
     gestures = GestureDelegate::Create();
-    for (int32_t index = 0; index < kMaxControllerCount; index++) {
+    for (int32_t index = 0; index < 1; index++) {
       controllers[index].index = index;
       if (index == 0) {
         controllers[index].type = WVR_DeviceType_Controller_Right;
@@ -151,9 +151,10 @@ struct DeviceDelegateWaveVR::State {
       }
     }
     if (sixDoFControllerCount) {
-      deviceType = device::ViveFocusPlus;
+        deviceType = device::ViveFocusPlus;
+      //deviceType = device::ViveFocusPlus;
     } else {
-      deviceType = device::ViveFocus;
+      deviceType = device::ViveFocusPlus;
     }
     reorientMatrix = vrb::Matrix::Identity();
   }
@@ -689,7 +690,7 @@ DeviceDelegateWaveVR::ReleaseControllerDelegate() {
 
 int32_t
 DeviceDelegateWaveVR::GetControllerModelCount() const {
-  return 2;
+  return 1;
 }
 
 // #define VRB_WAVE_EVENT_LOG_ENABLED 1
@@ -1000,6 +1001,7 @@ DeviceDelegateWaveVR::EndFrame(const FrameEndMode aMode) {
 }
 
 vrb::LoadTask DeviceDelegateWaveVR::GetControllerModelTask(int32_t aModelIndex) {
+    VRB_LOG("[WaveVR] (%p) Loading internal controller model: %d", this, aModelIndex);
   vrb::RenderContextPtr localContext = m.context.lock();
   if (!localContext) {
     return nullptr;
@@ -1007,7 +1009,8 @@ vrb::LoadTask DeviceDelegateWaveVR::GetControllerModelTask(int32_t aModelIndex) 
 
   return [this, aModelIndex](vrb::CreationContextPtr& aContext) -> vrb::GroupPtr {
       vrb::GroupPtr root = vrb::Group::Create(aContext);
-      auto hand = static_cast<ElbowModel::HandEnum>(aModelIndex);
+      //auto hand = static_cast<ElbowModel::HandEnum>(aModelIndex == 0 ? );
+      auto hand = aModelIndex == 0 ? ElbowModel::HandEnum::Right : ElbowModel::HandEnum::Left;
 
       // Load controller model from SDK
       VRB_LOG("[WaveVR] (%p) Loading internal controller model: %d", this, aModelIndex);
