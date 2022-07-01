@@ -150,10 +150,16 @@ struct DeviceDelegateWaveVR::State {
         sixDoFControllerCount++;
       }
     }
+    const bool magicDetectDeviceIfItsFlow =  true; //TODO: actually detect if is flow
+
     if (sixDoFControllerCount) {
       deviceType = device::ViveFocusPlus;
     } else {
-      deviceType = device::ViveFocus;
+      if(magicDetectDeviceIfItsFlow){
+        deviceType = device::ViveFlow;
+      }else{
+        deviceType = device::ViveFocus;
+      }
     }
     reorientMatrix = vrb::Matrix::Identity();
   }
@@ -299,8 +305,11 @@ struct DeviceDelegateWaveVR::State {
             beamTransform);
     delegate->SetLeftHanded(aController.index, aController.hand == ElbowModel::HandEnum::Left);
     delegate->SetHapticCount(aController.index, 1);
-    delegate->SetControllerType(aController.index, aController.is6DoF ? device::ViveFocusPlus :
-                                device::ViveFocus);
+    auto controllerType = aController.is6DoF ? device::ViveFocusPlus : device::ViveFocus;
+    /*if(this->deviceType == device::ViveFlow){
+      controllerType = device::ViveFlow;
+    }*/
+    delegate->SetControllerType(aController.index, controllerType);
     delegate->SetTargetRayMode(aController.index, device::TargetRayMode::TrackedPointer);
 
     if (aController.is6DoF) {
@@ -1008,9 +1017,12 @@ vrb::LoadTask DeviceDelegateWaveVR::GetControllerModelTask(int32_t aModelIndex) 
   return [this, aModelIndex](vrb::CreationContextPtr& aContext) -> vrb::GroupPtr {
       vrb::GroupPtr root = vrb::Group::Create(aContext);
       auto hand = aModelIndex == 0 ? ElbowModel::HandEnum::Right : ElbowModel::HandEnum::Left; // the index is the opposite of the way these are created, where index0 is right and index1 is left in the constructor
-
+      if(this->GetDeviceType() == device::ViveFlow){
+        hand = ElbowModel::HandEnum::Right;
+      }
       // Load controller model from SDK
       VRB_LOG("[WaveVR] (%p) Loading internal controller model: %d", this, aModelIndex);
+
       WVR_DeviceType mCtrlerType = hand == ElbowModel::HandEnum::Left ? WVR_DeviceType_Controller_Left : WVR_DeviceType_Controller_Right;
       {//Critical Section: Clear flag and cached parsed data.
         std::lock_guard<std::mutex> lockGuard(m.mCachedDataMutex[aModelIndex]);
