@@ -35,12 +35,10 @@ def getDevApplicationIdSuffix = { ->
 }
 
 def getUseDebugSigningOnRelease = {
-    /*
     if (gradle.hasProperty("userProperties.useDebugSigningOnRelease")) {
         return gradle."userProperties.useDebugSigningOnRelease" == "true"
     }
-    */
-    return true
+    return false
 }
 
 def getOpenXRFlags = { ->
