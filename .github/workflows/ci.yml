@@ -54,4 +54,4 @@ jobs:
           name: wolvic_${{github.run_id}}_${{github.run_number}}_${{github.run_attempt}}
           retention-days: 30
           path: |
-            app/**/*.apk
+            app/build/outputs/**/*.apk
