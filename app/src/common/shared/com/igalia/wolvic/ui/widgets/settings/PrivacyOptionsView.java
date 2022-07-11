@@ -18,12 +18,13 @@ import android.widget.TextView;
 
 import androidx.databinding.DataBindingUtil;
 
-import org.mozilla.geckoview.GeckoSession;
-import org.mozilla.geckoview.StorageController;
 import com.igalia.wolvic.R;
 import com.igalia.wolvic.browser.SettingsStore;
+import com.igalia.wolvic.browser.api.WRuntime;
+import com.igalia.wolvic.browser.api.WSession;
 import com.igalia.wolvic.browser.engine.SessionStore;
 import com.igalia.wolvic.databinding.OptionsPrivacyBinding;
+import com.igalia.wolvic.search.SearchEngineWrapper;
 import com.igalia.wolvic.ui.views.settings.RadioGroupSetting;
 import com.igalia.wolvic.ui.views.settings.SwitchSetting;
 import com.igalia.wolvic.ui.widgets.WidgetManagerDelegate;
@@ -67,20 +68,19 @@ class PrivacyOptionsView extends SettingsView {
         mBinding.footerLayout.setFooterButtonClickListener(v -> resetOptions());
 
         // Options
-        mBinding.showPrivacyButton.setOnClickListener(v -> {
-            SessionStore.get().getActiveSession().loadUri(getContext().getString(R.string.private_policy_url));
-            exitWholeSettings();
-        });
+        mBinding.showTermsButton.setOnClickListener(v -> mDelegate.showView(SettingViewType.TERMS_OF_SERVICE));
+
+        mBinding.showPrivacyButton.setOnClickListener(v -> mDelegate.showView(SettingViewType.PRIVACY_POLICY));
 
         mBinding.clearCookiesSite.setOnClickListener(v -> {
             SessionStore.get().clearCache(
-                    StorageController.ClearFlags.SITE_DATA |
-                            StorageController.ClearFlags.COOKIES |
-                            StorageController.ClearFlags.SITE_SETTINGS);
+                    WRuntime.ClearFlags.SITE_DATA |
+                            WRuntime.ClearFlags.COOKIES |
+                            WRuntime.ClearFlags.SITE_SETTINGS);
         });
 
         mBinding.clearWebContent.setOnClickListener(v -> {
-            SessionStore.get().clearCache(StorageController.ClearFlags.ALL_CACHES);
+            SessionStore.get().clearCache(WRuntime.ClearFlags.ALL_CACHES);
         });
 
         TextView permissionsTitleText = findViewById(R.id.permissionsTitle);
@@ -136,6 +136,10 @@ class PrivacyOptionsView extends SettingsView {
         mBinding.autocompleteSwitch.setOnCheckedChangeListener(mAutocompleteListener);
         setAutocomplete(SettingsStore.getInstance(getContext()).isAutocompleteEnabled(), false);
 
+        mBinding.searchEngineButton.setOnClickListener(v -> mDelegate.showView(SettingViewType.SEARCH_ENGINE));
+        String searchEngineName = SearchEngineWrapper.get(getContext()).getCurrentSearchEngine().getName();
+        mBinding.searchEngineDescription.setText(searchEngineName);
+
         mBinding.webxrSwitch.setOnCheckedChangeListener(mWebXRListener);
         setWebXR(SettingsStore.getInstance(getContext()).isWebXREnabled(), false);
         mBinding.webxrExceptionsButton.setOnClickListener(v -> mDelegate.showView(SettingViewType.WEBXR_EXCEPTIONS));
@@ -150,10 +154,6 @@ class PrivacyOptionsView extends SettingsView {
         mBinding.trackingProtectionRadio.setOnCheckedChangeListener(mTrackingProtectionListener);
         setTrackingProtection(mBinding.trackingProtectionRadio.getIdForValue(etpLevel), false);
 
-        @SettingsStore.Storage int downloadsStorage = SettingsStore.getInstance(getContext()).getDownloadsStorage();
-        mBinding.downloadsStorage.setOnCheckedChangeListener(mDownloadsStorageListener);
-        setDownloadsStorage(mBinding.downloadsStorage.getIdForValue(downloadsStorage), false);
-
         mBinding.loginsAndPasswords.setOnClickListener(view -> mDelegate.showView(SettingViewType.LOGINS_AND_PASSWORDS));
     }
 
@@ -163,7 +163,7 @@ class PrivacyOptionsView extends SettingsView {
             aButton.setChecked(true);
 
         } else {
-            mWidgetManager.requestPermission("", aPermission, new GeckoSession.PermissionDelegate.Callback() {
+            mWidgetManager.requestPermission("", aPermission, new WSession.PermissionDelegate.Callback() {
                 @Override
                 public void grant() {
                     aButton.setChecked(true);
@@ -216,10 +216,6 @@ class PrivacyOptionsView extends SettingsView {
         setWebXR(value, doApply);
     };
 
-    private RadioGroupSetting.OnCheckedChangeListener mDownloadsStorageListener = (radioGroup, checkedId, doApply) -> {
-        setDownloadsStorage(checkedId, true);
-    };
-
     private void resetOptions() {
         if (mBinding.drmContentPlaybackSwitch.isChecked() != SettingsStore.DRM_PLAYBACK_DEFAULT) {
             setDrmContent(SettingsStore.DRM_PLAYBACK_DEFAULT, true);
@@ -260,10 +256,6 @@ class PrivacyOptionsView extends SettingsView {
 
         if (mBinding.webxrSwitch.isChecked() != SettingsStore.WEBXR_ENABLED_DEFAULT) {
             setWebXR(SettingsStore.WEBXR_ENABLED_DEFAULT, true);
-        }
-
-        if (!mBinding.downloadsStorage.getValueForId(mBinding.downloadsStorage.getCheckedRadioButtonId()).equals(SettingsStore.DOWNLOADS_STORAGE_DEFAULT)) {
-            setDownloadsStorage(mBinding.downloadsStorage.getIdForValue(SettingsStore.DOWNLOADS_STORAGE_DEFAULT), true);
         }
     }
 
@@ -365,17 +357,9 @@ class PrivacyOptionsView extends SettingsView {
         if (doApply) {
             SettingsStore.getInstance(getContext()).setWebXREnabled(value);
             for (WindowWidget window: mWidgetManager.getWindows().getCurrentWindows()) {
-                window.getSession().reload(GeckoSession.LOAD_FLAGS_BYPASS_CACHE);
+                window.getSession().reload(WSession.LOAD_FLAGS_BYPASS_CACHE);
             }
         }
-    }
-
-    private void setDownloadsStorage(int checkId, boolean doApply) {
-        mBinding.downloadsStorage.setOnCheckedChangeListener(null);
-        mBinding.downloadsStorage.setChecked(checkId, doApply);
-        mBinding.downloadsStorage.setOnCheckedChangeListener(mDownloadsStorageListener);
-
-        SettingsStore.getInstance(getContext()).setDownloadsStorage((Integer)mBinding.downloadsStorage.getValueForId(checkId));
     }
 
     @Override

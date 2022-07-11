@@ -1,5 +1,7 @@
 package com.igalia.wolvic.utils;
 
+import static android.os.Build.VERSION_CODES.N;
+
 import android.content.Context;
 import android.content.res.Configuration;
 import android.content.res.Resources;
@@ -24,12 +26,10 @@ import java.util.Optional;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import static android.os.Build.VERSION_CODES.N;
-
 public class LocaleUtils {
 
-    private static final String DEFAULT_LANGUAGE_ID = "default";
-    private static final String FALLBACK_LANGUAGE_TAG = "en-US";
+    public static final String DEFAULT_LANGUAGE_ID = "default";
+    public static final String FALLBACK_LANGUAGE_TAG = "en-US";
 
     private static HashMap<String, Language> mLanguagesCache;
     private static Map<String, Language> mSupportedLanguagesCache;
@@ -201,24 +201,13 @@ public class LocaleUtils {
         return languageId;
     }
 
-    @NonNull
-    public static String getVoiceSearchLanguageTag(@NonNull Context aContext) {
-        String languageId = getVoiceSearchLanguageId(aContext);
-        Language language = mSupportedLanguagesCache.get(languageId);
-        if (language != null) {
-            return language.getLanguageTag();
+    public static String getVoiceLanguageName(@NonNull Context aContext, @NonNull String language) {
+        if (language.equals(LocaleUtils.DEFAULT_LANGUAGE_ID)) {
+            return aContext.getString(R.string.settings_language_follow_device);
+        } else {
+            Locale locale = Locale.forLanguageTag(language);
+            return StringUtils.capitalize(locale.getDisplayLanguage(locale));
         }
-
-        return getClosestSupportedLanguageTag(languageId);
-    }
-
-    public static Language getVoiceSearchLanguage(@NonNull Context aContext) {
-        String languageId = getVoiceSearchLanguageId(aContext);
-        Language language = mSupportedLanguagesCache.get(languageId);
-        if (language == null) {
-            language = mSupportedLanguagesCache.get(FALLBACK_LANGUAGE_TAG);
-        }
-        return language;
     }
 
     public static void setVoiceSearchLanguageId(@NonNull Context context, @NonNull String languageId) {
@@ -296,8 +285,6 @@ public class LocaleUtils {
             put(locale.toLanguageTag(), new Language(locale, StringUtils.getStringByLocale(context, R.string.settings_language_english_us, locale)));
             locale = new Locale("en","GB");
             put(locale.toLanguageTag(), new Language(locale, StringUtils.getStringByLocale(context, R.string.settings_language_english_uk, locale)));
-            locale = new Locale.Builder().setLanguage("zh").setScript("Hant").setRegion("TW").build();
-            put(locale.toLanguageTag(), new Language(locale, StringUtils.getStringByLocale(context, R.string.settings_language_traditional_chinese, locale)));
             locale = new Locale.Builder().setLanguage("zh").setScript("Hans").setRegion("CN").build();
             put(locale.toLanguageTag(), new Language(locale, StringUtils.getStringByLocale(context, R.string.settings_language_simplified_chinese, locale)));
             locale = new Locale("ja","JP");
@@ -314,22 +301,12 @@ public class LocaleUtils {
             put(locale.toLanguageTag(), new Language(locale, StringUtils.getStringByLocale(context, R.string.settings_language_russian, locale)));
             locale = new Locale("ko","KR");
             put(locale.toLanguageTag(), new Language(locale, StringUtils.getStringByLocale(context, R.string.settings_language_korean, locale)));
-            locale = new Locale("it","IT");
-            put(locale.toLanguageTag(), new Language(locale, StringUtils.getStringByLocale(context, R.string.settings_language_italian, locale)));
             locale = new Locale("da","DK");
             put(locale.toLanguageTag(), new Language(locale, StringUtils.getStringByLocale(context, R.string.settings_language_danish, locale)));
-            locale = new Locale("pl","PL");
-            put(locale.toLanguageTag(), new Language(locale, StringUtils.getStringByLocale(context, R.string.settings_language_polish, locale)));
-            locale = new Locale("nb","NO");
-            put(locale.toLanguageTag(), new Language(locale, StringUtils.getStringByLocale(context, R.string.settings_language_norwegian_bokmaal, locale)));
-            locale = new Locale("nn","NO");
-            put(locale.toLanguageTag(), new Language(locale, StringUtils.getStringByLocale(context, R.string.settings_language_norwegian_nynorsk, locale)));
-            locale = new Locale("sv","SE");
-            put(locale.toLanguageTag(), new Language(locale, StringUtils.getStringByLocale(context, R.string.settings_language_swedish, locale)));
             locale = new Locale("fi","FI");
             put(locale.toLanguageTag(), new Language(locale, StringUtils.getStringByLocale(context, R.string.settings_language_finnish, locale)));
-            locale = new Locale("nl","NL");
-            put(locale.toLanguageTag(), new Language(locale, StringUtils.getStringByLocale(context, R.string.settings_language_dutch, locale)));
+            locale = new Locale("gl", "ES");
+            put(locale.toLanguageTag(), new Language(locale, StringUtils.getStringByLocale(context, R.string.settings_language_galician, locale)));
         }};
 
         Locale locale = getDeviceLocale();
@@ -422,4 +399,23 @@ public class LocaleUtils {
         return FALLBACK_LANGUAGE_TAG;
     }
 
+    // Returns the closest language (among those supported) for the given locale, or the fallback.
+    public static String getClosestLanguageForLocale(Locale locale, List<String> supported, String fallback) {
+        final String defaultLanguageTag = locale.toLanguageTag();
+        if (supported.contains(defaultLanguageTag)) {
+            return defaultLanguageTag;
+        }
+
+        final String defaultLanguage = locale.getLanguage();
+        if (supported.contains(defaultLanguage)) {
+            return defaultLanguage;
+        }
+
+        Optional<String> closestLanguage = supported.stream().filter(s -> s.startsWith(defaultLanguage)).findFirst();
+        if (closestLanguage.isPresent()) {
+            return closestLanguage.get();
+        }
+
+        return fallback;
+    }
 }
