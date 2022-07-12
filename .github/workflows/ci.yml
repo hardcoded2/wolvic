@@ -48,3 +48,10 @@ jobs:
         uses: gradle/gradle-build-action@v2
         with:
           arguments: ${{ matrix.flavour }}
+      - name: Archive production artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: wolvic_${{github.run_id}}_${{github.run_number}}_${{github.run_attempt}}
+          retention-days: 30
+          path: |
+            app/build/outputs/**/*.apk
