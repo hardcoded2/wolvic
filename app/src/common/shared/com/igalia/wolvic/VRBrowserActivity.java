@@ -12,7 +12,6 @@ import android.content.ComponentCallbacks2;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
-import android.content.SharedPreferences;
 import android.content.res.Configuration;
 import android.graphics.Canvas;
 import android.graphics.Color;
@@ -28,7 +27,6 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.Process;
-import android.preference.PreferenceManager;
 import android.util.Log;
 import android.util.Pair;
 import android.view.KeyEvent;
@@ -40,7 +38,6 @@ import android.widget.FrameLayout;
 import androidx.annotation.Keep;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
-import androidx.fragment.app.FragmentController;
 import androidx.lifecycle.Lifecycle;
 import androidx.lifecycle.LifecycleOwner;
 import androidx.lifecycle.LifecycleRegistry;
@@ -61,8 +58,6 @@ import com.igalia.wolvic.crashreporting.GlobalExceptionHandler;
 import com.igalia.wolvic.geolocation.GeolocationWrapper;
 import com.igalia.wolvic.input.MotionEventGenerator;
 import com.igalia.wolvic.search.SearchEngineWrapper;
-import com.igalia.wolvic.speech.SpeechRecognizer;
-import com.igalia.wolvic.speech.SpeechServices;
 import com.igalia.wolvic.telemetry.TelemetryService;
 import com.igalia.wolvic.ui.OffscreenDisplay;
 import com.igalia.wolvic.ui.adapters.Language;
@@ -80,7 +75,7 @@ import com.igalia.wolvic.ui.widgets.WidgetPlacement;
 import com.igalia.wolvic.ui.widgets.WindowWidget;
 import com.igalia.wolvic.ui.widgets.Windows;
 import com.igalia.wolvic.ui.widgets.dialogs.CrashDialogWidget;
-import com.igalia.wolvic.ui.widgets.dialogs.LegalDocumentDialogWidget;
+import com.igalia.wolvic.ui.widgets.dialogs.PrivacyPolicyDialogWidget;
 import com.igalia.wolvic.ui.widgets.dialogs.PromptDialogWidget;
 import com.igalia.wolvic.ui.widgets.dialogs.SendTabDialogWidget;
 import com.igalia.wolvic.ui.widgets.dialogs.WhatsNewWidget;
@@ -99,13 +94,11 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.LinkedList;
-import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
 
-public class VRBrowserActivity extends PlatformActivity implements WidgetManagerDelegate,
-        ComponentCallbacks2, LifecycleOwner, ViewModelStoreOwner, SharedPreferences.OnSharedPreferenceChangeListener {
+public class VRBrowserActivity extends PlatformActivity implements WidgetManagerDelegate, ComponentCallbacks2, LifecycleOwner, ViewModelStoreOwner {
 
     private BroadcastReceiver mCrashReceiver = new BroadcastReceiver() {
         @Override
@@ -192,14 +185,12 @@ public class VRBrowserActivity extends PlatformActivity implements WidgetManager
     private Pair<Object, Float> mCurrentBrightness;
     private SearchEngineWrapper mSearchEngineWrapper;
     private SettingsStore mSettings;
-    private SharedPreferences mPrefs;
     private boolean mConnectionAvailable = true;
     private AudioManager mAudioManager;
     private Widget mActiveDialog;
     private Set<String> mPoorPerformanceAllowList;
     private float mCurrentCylinderDensity = 0;
     private boolean mHideWebXRIntersitial = false;
-    private FragmentController mFragmentController;
 
     private boolean callOnAudioManager(Consumer<AudioManager> fn) {
         if (mAudioManager == null) {
@@ -234,10 +225,6 @@ public class VRBrowserActivity extends PlatformActivity implements WidgetManager
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
-        mFragmentController = FragmentController.createController(new FragmentControllerCallbacks(this, new Handler(), 0));
-        mFragmentController.attachHost(null);
-        mFragmentController.dispatchActivityCreated();
-
         SettingsStore.getInstance(getBaseContext()).setPid(Process.myPid());
         ((VRBrowserApplication)getApplication()).onActivityCreate(this);
         // Fix for infinite restart on startup crashes.
@@ -261,8 +248,7 @@ public class VRBrowserActivity extends PlatformActivity implements WidgetManager
 
         BitmapCache.getInstance(this).onCreate();
 
-        WRuntime runtime = EngineProvider.INSTANCE.getOrCreateRuntime(this);
-        runtime.appendAppNotesToCrashReport("Wolvic " + BuildConfig.VERSION_NAME + "-" + BuildConfig.VERSION_CODE + "-" + BuildConfig.FLAVOR + "-" + BuildConfig.BUILD_TYPE + " (" + BuildConfig.GIT_HASH + ")");
+        EngineProvider.INSTANCE.getOrCreateRuntime(this).appendAppNotesToCrashReport("Wolvic " + BuildConfig.VERSION_NAME + "-" + BuildConfig.VERSION_CODE + "-" + BuildConfig.FLAVOR + "-" + BuildConfig.BUILD_TYPE + " (" + BuildConfig.GIT_HASH + ")");
 
         // Create broadcast receiver for getting crash messages from crash process
         IntentFilter intentFilter = new IntentFilter();
@@ -284,8 +270,6 @@ public class VRBrowserActivity extends PlatformActivity implements WidgetManager
         mWidgets = new ConcurrentHashMap<>();
         mWidgetContainer = new FrameLayout(this);
 
-        runtime.setFragmentManager(mFragmentController.getSupportFragmentManager(), mWidgetContainer);
-
         mPermissionDelegate = new PermissionDelegate(this, this);
 
         mAudioEngine = new AudioEngine(this, null);
@@ -298,9 +282,6 @@ public class VRBrowserActivity extends PlatformActivity implements WidgetManager
 
         mSettings = SettingsStore.getInstance(this);
         mSettings.initModel(this);
-
-        mPrefs = PreferenceManager.getDefaultSharedPreferences(this);
-        mPrefs.registerOnSharedPreferenceChangeListener(this);
 
         queueRunnable(() -> {
             createOffscreenDisplay();
@@ -393,10 +374,8 @@ public class VRBrowserActivity extends PlatformActivity implements WidgetManager
         addWidgets(Arrays.asList(mRootWidget, mNavigationBar, mKeyboard, mTray, mWebXRInterstitial));
 
         // Show the launch dialogs, if needed.
-        if (!showTermsServiceDialogIfNeeded()) {
-            if (!showPrivacyDialogIfNeeded()) {
-                showWhatsNewDialogIfNeeded();
-            }
+        if (!showPrivacyDialogIfNeeded()) {
+            showWhatsNewDialogIfNeeded();
         }
 
         mWindows.restoreSessions();
@@ -420,39 +399,12 @@ public class VRBrowserActivity extends PlatformActivity implements WidgetManager
     }
 
     // Returns true if the dialog was shown, false otherwise.
-    private boolean showTermsServiceDialogIfNeeded() {
-        if (SettingsStore.getInstance(this).isTermsServiceAccepted()) {
-            return false;
-        }
-
-        LegalDocumentDialogWidget termsServiceDialog =
-                new LegalDocumentDialogWidget(this, LegalDocumentDialogWidget.LegalDocument.TERMS_OF_SERVICE);
-
-        termsServiceDialog.setDelegate(response -> {
-            if (response) {
-                SettingsStore.getInstance(this).setTermsServiceAccepted(true);
-                if (!showPrivacyDialogIfNeeded()) {
-                    showWhatsNewDialogIfNeeded();
-                }
-            } else {
-                // TODO ask for confirmation ("are you really sure that you want to close Wolvic?")
-                Log.w(LOGTAG, "The user rejected the privacy policy, closing the app.");
-                finish();
-            }
-        });
-        termsServiceDialog.attachToWindow(mWindows.getFocusedWindow());
-        termsServiceDialog.show(UIWidget.REQUEST_FOCUS);
-        return true;
-    }
-
-    // Returns true if the dialog was shown, false otherwise.
     private boolean showPrivacyDialogIfNeeded() {
         if (SettingsStore.getInstance(this).isPrivacyPolicyAccepted()) {
             return false;
         }
 
-        LegalDocumentDialogWidget privacyPolicyDialog
-                = new LegalDocumentDialogWidget(this, LegalDocumentDialogWidget.LegalDocument.PRIVACY_POLICY);
+        PrivacyPolicyDialogWidget privacyPolicyDialog = new PrivacyPolicyDialogWidget(this);
         privacyPolicyDialog.setDelegate(response -> {
             if (response) {
                 SettingsStore.getInstance(this).setPrivacyPolicyAccepted(true);
@@ -472,9 +424,6 @@ public class VRBrowserActivity extends PlatformActivity implements WidgetManager
         if (SettingsStore.getInstance(this).isWhatsNewDisplayed()) {
             return;
         }
-        if (shouldOpenInKioskMode(getIntent())) {
-            return;
-        }
         mWhatsNewWidget = new WhatsNewWidget(this);
         mWhatsNewWidget.setLoginOrigin(Accounts.LoginOrigin.NONE);
         mWhatsNewWidget.getPlacement().parentHandle = mWindows.getFocusedWindow().getHandle();
@@ -485,7 +434,6 @@ public class VRBrowserActivity extends PlatformActivity implements WidgetManager
     protected void onStart() {
         SettingsStore.getInstance(getBaseContext()).setPid(Process.myPid());
         super.onStart();
-        mFragmentController.dispatchStart();
         mLifeCycle.setCurrentState(Lifecycle.State.STARTED);
         if (mTray == null) {
             Log.e(LOGTAG, "Failed to start Tray clock");
@@ -498,7 +446,6 @@ public class VRBrowserActivity extends PlatformActivity implements WidgetManager
     protected void onStop() {
         SettingsStore.getInstance(getBaseContext()).setPid(0);
         super.onStop();
-        mFragmentController.dispatchStop();
         TelemetryService.sessionStop();
         if (mTray != null) {
             mTray.stop(this);
@@ -527,7 +474,6 @@ public class VRBrowserActivity extends PlatformActivity implements WidgetManager
         }
 
         mAudioEngine.pauseEngine();
-        mFragmentController.dispatchPause();
 
         mWindows.onPause();
 
@@ -553,7 +499,6 @@ public class VRBrowserActivity extends PlatformActivity implements WidgetManager
             mOffscreenDisplay.onResume();
         }
 
-        mFragmentController.dispatchResume();
         mWindows.onResume();
 
         mAudioEngine.resumeEngine();
@@ -577,8 +522,6 @@ public class VRBrowserActivity extends PlatformActivity implements WidgetManager
         // Unregister the crash service broadcast receiver
         unregisterReceiver(mCrashReceiver);
         mSearchEngineWrapper.unregisterForUpdates();
-
-        mFragmentController.dispatchDestroy();
 
         for (Widget widget: mWidgets.values()) {
             widget.releaseWidget();
@@ -604,8 +547,6 @@ public class VRBrowserActivity extends PlatformActivity implements WidgetManager
         SessionStore.get().onDestroy();
 
         getServicesProvider().getConnectivityReceiver().removeListener(mConnectivityDelegate);
-
-        mPrefs.unregisterOnSharedPreferenceChangeListener(this);
 
         super.onDestroy();
         mLifeCycle.setCurrentState(Lifecycle.State.DESTROYED);
@@ -636,26 +577,11 @@ public class VRBrowserActivity extends PlatformActivity implements WidgetManager
 
         LocaleUtils.update(this, language);
 
-        mFragmentController.dispatchConfigurationChanged(newConfig);
-
         SessionStore.get().onConfigurationChanged(newConfig);
         mWidgets.forEach((i, widget) -> widget.onConfigurationChanged(newConfig));
         SendTabDialogWidget.getInstance(this).onConfigurationChanged(newConfig);
 
         super.onConfigurationChanged(newConfig);
-    }
-
-    @Override
-    public void onSharedPreferenceChanged(SharedPreferences sharedPreferences, String key) {
-        try {
-            if (key.equals(getString(R.string.settings_key_voice_search_service))) {
-                SpeechRecognizer speechRecognizer =
-                        SpeechServices.getInstance(this, SettingsStore.getInstance(this).getVoiceSearchService());
-                ((VRBrowserApplication) getApplication()).setSpeechRecognizer(speechRecognizer);
-            }
-        } catch (ReflectiveOperationException e) {
-            e.printStackTrace();
-        }
     }
 
     void loadFromIntent(final Intent intent) {
@@ -749,30 +675,15 @@ public class VRBrowserActivity extends PlatformActivity implements WidgetManager
 
             int location = Windows.OPEN_IN_FOREGROUND;
 
-            if (shouldOpenInKioskMode(intent)) {
-                // FIXME this might not work as expected if the app was already running
-                mWindows.openInKioskMode(uri.toString());
-            } else {
-                if (openInWindow) {
-                    location = Windows.OPEN_IN_NEW_WINDOW;
-                } else if (openInBackground) {
-                    location = Windows.OPEN_IN_BACKGROUND;
-                }
-                mWindows.openNewTabAfterRestore(uri.toString(), location);
+            if (openInWindow) {
+                location = Windows.OPEN_IN_NEW_WINDOW;
+            } else if (openInBackground) {
+                location = Windows.OPEN_IN_BACKGROUND;
             }
+            mWindows.openNewTabAfterRestore(uri.toString(), location);
         } else {
             mWindows.getFocusedWindow().loadHomeIfBlank();
         }
-    }
-
-    private boolean shouldOpenInKioskMode(@NonNull Intent intent) {
-        if (DeviceType.isHVRBuild()) {
-            // This action is specific to HVR in Virtual Reality mode.
-            // The data of the Intent points at the URL that will be opened in kiosk mode.
-            return Objects.equals(intent.getAction(), "com.huawei.android.vr.action.MAIN")
-                    && intent.getData() != null;
-        }
-        return false;
     }
 
     private ConnectivityReceiver.Delegate mConnectivityDelegate = connected -> {
@@ -815,10 +726,6 @@ public class VRBrowserActivity extends PlatformActivity implements WidgetManager
             }
             mCrashDialog.show(UIWidget.REQUEST_FOCUS);
         }
-    }
-
-    FrameLayout getWidgetContainer() {
-        return mWidgetContainer;
     }
 
     @Override
@@ -1519,11 +1426,6 @@ public class VRBrowserActivity extends PlatformActivity implements WidgetManager
     }
 
     @Override
-    public void recreateWidgetSurface(Widget aWidget) {
-        queueRunnable(() -> recreateWidgetSurfaceNative(aWidget.getHandle()));
-    }
-
-    @Override
     public void startWidgetResize(final Widget aWidget, float aMaxWidth, float aMaxHeight, float minWidth, float minHeight) {
         if (aWidget == null) {
             return;
@@ -1833,7 +1735,6 @@ public class VRBrowserActivity extends PlatformActivity implements WidgetManager
     private native void updateWidgetNative(int aHandle, WidgetPlacement aPlacement);
     private native void updateVisibleWidgetsNative();
     private native void removeWidgetNative(int aHandle);
-    private native void recreateWidgetSurfaceNative(int aHandle);
     private native void startWidgetResizeNative(int aHandle, float maxWidth, float maxHeight, float minWidth, float minHeight);
     private native void finishWidgetResizeNative(int aHandle);
     private native void startWidgetMoveNative(int aHandle, int aMoveBehaviour);
