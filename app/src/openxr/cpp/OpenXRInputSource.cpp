@@ -45,6 +45,7 @@ XrResult OpenXRInputSource::Initialize()
     // Initialize pose actions and spaces.
     RETURN_IF_XR_FAILED(mActionSet.GetOrCreateAction(XR_ACTION_TYPE_POSE_INPUT, "grip", OpenXRHandFlags::Both, mGripAction));
     RETURN_IF_XR_FAILED(mActionSet.GetOrCreateAction(XR_ACTION_TYPE_POSE_INPUT, "pointer", OpenXRHandFlags::Both, mPointerAction));
+    RETURN_IF_XR_FAILED(mActionSet.GetOrCreateAction(XR_ACTION_TYPE_VIBRATION_OUTPUT, "haptic", OpenXRHandFlags::Both, mHapticAction));
 
     // Filter mappings
     for (auto& mapping: OpenXRInputMappings) {
@@ -144,6 +145,33 @@ XrResult OpenXRInputSource::GetPoseState(XrAction action, XrSpace space, XrSpace
     return XR_SUCCESS;
 }
 
+XrResult OpenXRInputSource::applyHapticFeedback(XrAction action, XrDuration duration, float frequency, float amplitude) const
+{
+    XrHapticActionInfo hapticActionInfo { XR_TYPE_HAPTIC_ACTION_INFO };
+    hapticActionInfo.action = action;
+    hapticActionInfo.subactionPath = mSubactionPath;
+
+    XrHapticVibration hapticVibration { XR_TYPE_HAPTIC_VIBRATION };
+    hapticVibration.duration = duration;
+    hapticVibration.frequency = frequency;
+    hapticVibration.amplitude = amplitude;
+
+    RETURN_IF_XR_FAILED(xrApplyHapticFeedback(mSession, &hapticActionInfo, (const XrHapticBaseHeader*)&hapticVibration));
+
+    return XR_SUCCESS;
+}
+
+XrResult OpenXRInputSource::stopHapticFeedback(XrAction action) const
+{
+    XrHapticActionInfo hapticActionInfo { XR_TYPE_HAPTIC_ACTION_INFO };
+    hapticActionInfo.action = action;
+    hapticActionInfo.subactionPath = mSubactionPath;
+
+    RETURN_IF_XR_FAILED(xrStopHapticFeedback(mSession, &hapticActionInfo));
+
+    return XR_SUCCESS;
+}
+
 std::optional<OpenXRInputSource::OpenXRButtonState> OpenXRInputSource::GetButtonState(const OpenXRButton& button) const
 {
     auto it = mButtonActions.find(button.type);
@@ -188,16 +216,15 @@ std::optional<XrVector2f> OpenXRInputSource::GetAxis(OpenXRAxisType axisType) co
         return std::nullopt;
 
 #if HVR
-    // axes must be between -1 and 1
-    axis.x = axis.x * 2 - 1;
-    axis.y = -(axis.y * 2 - 1);
-
     // Workaround for HVR controller precision issues
     const float kPrecision = 0.16;
     if (abs(axis.x) < kPrecision && abs(axis.y) < kPrecision) {
       axis.x = 0;
       axis.y = 0;
     }
+#ifdef HVR_6DOF
+    axis.y = -axis.y;
+#endif
 #endif
 
     return axis;
@@ -357,9 +384,40 @@ XrResult OpenXRInputSource::SuggestBindings(SuggestedBindings& bindings) const
             assert(action != XR_NULL_HANDLE);
             RETURN_IF_XR_FAILED(CreateBinding(mapping.path, action, mSubactionPathName + "/" + axis.path, bindings));
         }
+
+        for (auto& haptic: mapping.haptics) {
+            RETURN_IF_XR_FAILED(CreateBinding(mapping.path, mHapticAction,
+                                              mSubactionPathName + "/" + haptic.path, bindings));
+        }
     }
 
     return XR_SUCCESS;
+}
+
+void OpenXRInputSource::UpdateHaptics(ControllerDelegate &delegate)
+{
+    uint64_t frameId = 0;
+    float pulseDuration = 0.0f;
+    float pulseIntensity = 0.0f;
+    delegate.GetHapticFeedback(mIndex, frameId, pulseDuration, pulseIntensity);
+    if (frameId == 0 || pulseDuration <= 0.0f || pulseIntensity <= 0.0f) {
+        // No current haptic feedback, stop any ongoing haptic.
+        if (mStartHapticFrameId != 0) {
+            mStartHapticFrameId = 0;
+            CHECK_XRCMD(stopHapticFeedback(mHapticAction));
+        }
+        return;
+    }
+
+    if (frameId == mStartHapticFrameId)
+        return;
+    mStartHapticFrameId = frameId;
+
+    // Duration should be expressed in nanoseconds.
+    auto duration = (uint64_t) (pulseDuration * 1000000.0f);
+    pulseIntensity = std::max(pulseIntensity, 1.0f);
+
+    CHECK_XRCMD(applyHapticFeedback(mHapticAction, duration, XR_FREQUENCY_UNSPECIFIED, pulseIntensity));
 }
 
 void OpenXRInputSource::Update(const XrFrameState& frameState, XrSpace localSpace, const vrb::Matrix& head, float offsetY, device::RenderMode renderMode, ControllerDelegate& delegate)
@@ -409,6 +467,9 @@ void OpenXRInputSource::Update(const XrFrameState& frameState, XrSpace localSpac
 
 #ifdef HVR_6DOF
     const bool positionTracked = true;
+    // The HVR OpenXR SDK incorrectly returns the same value for aim and grip poses, we have to workaround it in the meantime.
+    // As it actually always return the grip pose we have to generate the aim pose from it.
+    pointerTransform.PostMultiplyInPlace(vrb::Matrix::Rotation(vrb::Vector(1.0, 0.0, 0.0), -M_PI / 4));
 #else
     const bool positionTracked = poseLocation.locationFlags & XR_SPACE_LOCATION_POSITION_TRACKED_BIT;
 #endif
@@ -436,12 +497,7 @@ void OpenXRInputSource::Update(const XrFrameState& frameState, XrSpace localSpac
         bool hasPosition = poseLocation.locationFlags & XR_SPACE_LOCATION_POSITION_TRACKED_BIT;
         delegate.SetImmersiveBeamTransform(mIndex, hasPosition ? gripTransform : pointerTransform);
         flags |= device::GripSpacePosition;
-#if HVR_6DOF
-        delegate.SetBeamTransform(mIndex, vrb::Matrix::Rotation(vrb::Vector(1.0, 0.0, 0.0), -M_PI / 4));
-#else
         delegate.SetBeamTransform(mIndex, vrb::Matrix::Identity());
-#endif
-
     } else {
         delegate.SetImmersiveBeamTransform(mIndex, vrb::Matrix::Identity());
     }
@@ -538,9 +594,11 @@ void OpenXRInputSource::Update(const XrFrameState& frameState, XrSpace localSpac
       }
     }
     delegate.SetAxes(mIndex, axesContainer.data(), axesContainer.size());
+
+    UpdateHaptics(delegate);
 }
 
-XrResult OpenXRInputSource::UpdateInteractionProfile()
+XrResult OpenXRInputSource::UpdateInteractionProfile(ControllerDelegate& delegate)
 {
     XrInteractionProfileState state { XR_TYPE_INTERACTION_PROFILE_STATE };
     RETURN_IF_XR_FAILED(xrGetCurrentInteractionProfile(mSession, mSubactionPath, &state));
@@ -560,6 +618,16 @@ XrResult OpenXRInputSource::UpdateInteractionProfile()
             mActiveMapping = &mapping;
             break;
         }
+    }
+
+    // Add haptic devices to controller, if any
+    if (mActiveMapping != nullptr) {
+        uint32_t numHaptics = 0;
+        for (auto& haptic: mActiveMapping->haptics) {
+            if (haptic.hand == OpenXRHandFlags::Both || haptic.hand == mHandeness)
+                numHaptics++;
+        }
+        delegate.SetHapticCount(mIndex, numHaptics);
     }
 
     return XR_SUCCESS;

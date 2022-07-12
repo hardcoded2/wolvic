@@ -15,16 +15,14 @@ import androidx.lifecycle.ViewModelProvider;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.reflect.TypeToken;
-
-import org.json.JSONArray;
-import org.json.JSONObject;
-import org.mozilla.geckoview.ContentBlocking;
-import org.mozilla.geckoview.GeckoSessionSettings;
 import com.igalia.wolvic.BuildConfig;
 import com.igalia.wolvic.R;
 import com.igalia.wolvic.VRBrowserActivity;
 import com.igalia.wolvic.VRBrowserApplication;
+import com.igalia.wolvic.browser.api.WContentBlocking;
+import com.igalia.wolvic.browser.api.WSessionSettings;
 import com.igalia.wolvic.browser.engine.EngineProvider;
+import com.igalia.wolvic.speech.SpeechServices;
 import com.igalia.wolvic.telemetry.TelemetryService;
 import com.igalia.wolvic.ui.viewmodel.SettingsViewModel;
 import com.igalia.wolvic.ui.widgets.menus.library.SortingContextMenuWidget;
@@ -32,6 +30,9 @@ import com.igalia.wolvic.utils.DeviceType;
 import com.igalia.wolvic.utils.RemoteProperties;
 import com.igalia.wolvic.utils.StringUtils;
 import com.igalia.wolvic.utils.SystemUtils;
+
+import org.json.JSONArray;
+import org.json.JSONObject;
 
 import java.io.IOException;
 import java.lang.reflect.Type;
@@ -44,8 +45,6 @@ import java.util.Map;
 
 import mozilla.components.concept.fetch.Request;
 import mozilla.components.concept.fetch.Response;
-
-import static com.igalia.wolvic.utils.ServoUtils.isServoAvailable;
 
 public class SettingsStore {
 
@@ -78,12 +77,11 @@ public class SettingsStore {
     public final static boolean UI_HARDWARE_ACCELERATION_DEFAULT_WAVEVR = false;
     public final static boolean PERFORMANCE_MONITOR_DEFAULT = true;
     public final static boolean DRM_PLAYBACK_DEFAULT = false;
-    public final static int TRACKING_DEFAULT = ContentBlocking.EtpLevel.DEFAULT;
+    public final static int TRACKING_DEFAULT = WContentBlocking.EtpLevel.DEFAULT;
     public final static boolean NOTIFICATIONS_DEFAULT = true;
     public final static boolean SPEECH_DATA_COLLECTION_DEFAULT = false;
     public final static boolean SPEECH_DATA_COLLECTION_REVIEWED_DEFAULT = false;
-    public final static boolean SERVO_DEFAULT = false;
-    public final static int UA_MODE_DEFAULT = GeckoSessionSettings.USER_AGENT_MODE_VR;
+    public final static int UA_MODE_DEFAULT = WSessionSettings.USER_AGENT_MODE_VR;
     public final static int INPUT_MODE_DEFAULT = 1;
     public final static float DISPLAY_DENSITY_DEFAULT = 1.0f;
     public final static int WINDOW_WIDTH_DEFAULT = 800;
@@ -93,8 +91,8 @@ public class SettingsStore {
     public final static int MAX_WINDOW_HEIGHT_DEFAULT = 1200;
     public final static int POINTER_COLOR_DEFAULT_DEFAULT = Color.parseColor("#FFFFFF");
     public final static int SCROLL_DIRECTION_DEFAULT = 0;
-    public final static String ENV_DEFAULT = "wolvic";
-    public final static int MSAA_DEFAULT_LEVEL = 1;
+    public final static String ENV_DEFAULT = "cyberpunk";
+    public final static int MSAA_DEFAULT_LEVEL = BuildConfig.MSAA_LEVEL;
     public final static boolean AUDIO_ENABLED = false;
     public final static float CYLINDER_DENSITY_ENABLED_DEFAULT = 4680.0f;
     private final static long CRASH_RESTART_DELTA = 2000;
@@ -110,14 +108,14 @@ public class SettingsStore {
     public final static long FXA_LAST_SYNC_NEVER = 0;
     public final static boolean RESTORE_TABS_ENABLED = true;
     public final static boolean BYPASS_CACHE_ON_RELOAD = false;
-    public final static int DOWNLOADS_STORAGE_DEFAULT = INTERNAL;
-    public final static int DOWNLOADS_SORTING_ORDER_DEFAULT = SortingContextMenuWidget.SORT_DATE_ASC;
+    public final static int DOWNLOADS_SORTING_ORDER_DEFAULT = SortingContextMenuWidget.SORT_DATE_DESC;
     public final static boolean AUTOCOMPLETE_ENABLED = true;
     public final static boolean WEBGL_OUT_OF_PROCESS = false;
     public final static int PREFS_LAST_RESET_VERSION_CODE = 0;
     public final static boolean PASSWORDS_ENCRYPTION_KEY_GENERATED = false;
     public final static boolean AUTOFILL_ENABLED = true;
     public final static boolean LOGIN_AUTOCOMPLETE_ENABLED = true;
+    public final static String SEARCH_ENGINE_DEFAULT = "";
 
     // Enable telemetry by default (opt-out).
     public final static boolean CRASH_REPORTING_DEFAULT = false;
@@ -285,7 +283,7 @@ public class SettingsStore {
         editor.putInt(mContext.getString(R.string.settings_key_tracking_protection_level), level);
         editor.commit();
 
-        mSettingsViewModel.setIsTrackingProtectionEnabled(level != ContentBlocking.EtpLevel.NONE);
+        mSettingsViewModel.setIsTrackingProtectionEnabled(level != WContentBlocking.EtpLevel.NONE);
     }
 
     public boolean isEnvironmentOverrideEnabled() {
@@ -325,16 +323,6 @@ public class SettingsStore {
         editor.commit();
     }
 
-    public boolean isServoEnabled() {
-        return isServoAvailable() && mPrefs.getBoolean(mContext.getString(R.string.settings_key_servo), SERVO_DEFAULT);
-    }
-
-    public void setServoEnabled(boolean isEnabled) {
-        SharedPreferences.Editor editor = mPrefs.edit();
-        editor.putBoolean(mContext.getString(R.string.settings_key_servo), isEnabled);
-        editor.commit();
-    }
-
     public int getUaMode() {
         return mPrefs.getInt(
                 mContext.getString(R.string.settings_key_user_agent_version), UA_MODE_DEFAULT);
@@ -342,7 +330,7 @@ public class SettingsStore {
 
     public void setUaMode(int mode) {
         int checkedMode = mode;
-        if ((mode != GeckoSessionSettings.USER_AGENT_MODE_VR) && (mode != GeckoSessionSettings.USER_AGENT_MODE_MOBILE)) {
+        if ((mode != WSessionSettings.USER_AGENT_MODE_VR) && (mode != WSessionSettings.USER_AGENT_MODE_MOBILE)) {
             Log.e(LOGTAG, "User agent mode: " + mode + " is not supported.");
             checkedMode = UA_MODE_DEFAULT;
         }
@@ -483,6 +471,17 @@ public class SettingsStore {
     public void setAudioEnabled(boolean isEnabled) {
         SharedPreferences.Editor editor = mPrefs.edit();
         editor.putBoolean(mContext.getString(R.string.settings_key_audio), isEnabled);
+        editor.commit();
+    }
+
+    public String getVoiceSearchService() {
+        return mPrefs.getString(
+                mContext.getString(R.string.settings_key_voice_search_service), SpeechServices.DEFAULT);
+    }
+
+    public void setVoiceSearchService(String service) {
+        SharedPreferences.Editor editor = mPrefs.edit();
+        editor.putString(mContext.getString(R.string.settings_key_voice_search_service), service);
         editor.commit();
     }
 
@@ -752,16 +751,6 @@ public class SettingsStore {
         return mPrefs.getBoolean(mContext.getString(R.string.settings_key_bypass_cache_on_reload), BYPASS_CACHE_ON_RELOAD);
     }
 
-    public void setDownloadsStorage(@Storage int storage) {
-        SharedPreferences.Editor editor = mPrefs.edit();
-        editor.putInt(mContext.getString(R.string.settings_key_downloads_external), storage);
-        editor.commit();
-    }
-
-    public @Storage int getDownloadsStorage() {
-        return mPrefs.getInt(mContext.getString(R.string.settings_key_downloads_external), DOWNLOADS_STORAGE_DEFAULT);
-    }
-
     public void setDownloadsSortingOrder(@SortingContextMenuWidget.Order int order) {
         SharedPreferences.Editor editor = mPrefs.edit();
         editor.putInt(mContext.getString(R.string.settings_key_downloads_sorting_order), order);
@@ -792,6 +781,20 @@ public class SettingsStore {
 
     public boolean isAutocompleteEnabled() {
         return mPrefs.getBoolean(mContext.getString(R.string.settings_key_autocomplete), AUTOCOMPLETE_ENABLED);
+    }
+
+    public String getSearchEngineId() {
+        return mPrefs.getString(mContext.getString(R.string.settings_key_search_engine_id), SEARCH_ENGINE_DEFAULT);
+    }
+
+    public void setSearchEngineId(@Nullable String searchEngineId) {
+        SharedPreferences.Editor editor = mPrefs.edit();
+        if (!StringUtils.isEmpty(searchEngineId)) {
+            editor.putString(mContext.getString(R.string.settings_key_search_engine_id), searchEngineId);
+        } else {
+            editor.remove(mContext.getString(R.string.settings_key_search_engine_id));
+        }
+        editor.commit();
     }
 
     public void setWebGLOutOfProcess(boolean isEnabled) {
@@ -829,7 +832,7 @@ public class SettingsStore {
 
         return propertiesMap;
     }
-    
+
     public void setRemoteProperties(@Nullable String json) {
         SharedPreferences.Editor editor = mPrefs.edit();
         editor.putString(mContext.getString(R.string.settings_key_remote_props), json);
@@ -888,6 +891,16 @@ public class SettingsStore {
 
     public String getTabAfterRestore() {
         return mPrefs.getString(mContext.getString(R.string.settings_key_tab_after_restore), null);
+    }
+
+    public void setTermsServiceAccepted(boolean isAccepted) {
+        SharedPreferences.Editor editor = mPrefs.edit();
+        editor.putBoolean(mContext.getString(R.string.settings_key_terms_service_accepted), isAccepted);
+        editor.commit();
+    }
+
+    public boolean isTermsServiceAccepted() {
+        return mPrefs.getBoolean(mContext.getString(R.string.settings_key_terms_service_accepted), false);
     }
 
     public void setPrivacyPolicyAccepted(boolean isAccepted) {

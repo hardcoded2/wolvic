@@ -622,7 +622,7 @@ DeviceDelegateOpenXR::ProcessEvents() {
       }
       case XR_TYPE_EVENT_DATA_INTERACTION_PROFILE_CHANGED: {
         if (m.input) {
-          m.input->UpdateInteractionProfile();
+          m.input->UpdateInteractionProfile(*m.controller);
           if (m.controllersReadyCallback && m.input->AreControllersReady()) {
             m.controllersReadyCallback();
             m.controllersReadyCallback = nullptr;
@@ -711,10 +711,11 @@ DeviceDelegateOpenXR::StartFrame(const FramePrediction aPrediction) {
     if (location.locationFlags & XR_SPACE_LOCATION_POSITION_VALID_BIT) {
       caps |= m.Is6DOF() ? device::Position : device::PositionEmulated;
     }
-    m.immersiveDisplay->SetCapabilityFlags(caps);
 
     // Update WebXR room scale transform if the device supports stage space
     if (m.stageSpace != XR_NULL_HANDLE) {
+      caps |= device::StageParameters;
+
       // Compute the transform between local and stage space
       XrSpaceLocation stageLocation{XR_TYPE_SPACE_LOCATION};
       xrLocateSpace(m.localSpace, m.stageSpace, m.predictedDisplayTime, &stageLocation);
@@ -727,9 +728,11 @@ DeviceDelegateOpenXR::StartFrame(const FramePrediction aPrediction) {
       m.immersiveDisplay->SetSittingToStandingTransform(vrb::Matrix::Translation(kAverageHeight));
 #endif
     }
+
+    m.immersiveDisplay->SetCapabilityFlags(caps);
   }
 
-  // Query eyeTransform ans perspective for each view
+  // Query eyeTransform and perspective for each view
   XrViewState viewState{XR_TYPE_VIEW_STATE};
   uint32_t viewCapacityInput = (uint32_t) m.views.size();
   uint32_t viewCountOutput = 0;
@@ -744,9 +747,10 @@ DeviceDelegateOpenXR::StartFrame(const FramePrediction aPrediction) {
     for (int i = 0; i < m.views.size(); ++i) {
       const XrView &view = m.views[i];
       const device::Eye eye = i == 0 ? device::Eye::Left : device::Eye::Right;
-      m.cameras[i]->SetEyeTransform(XrPoseToMatrix(view.pose));
+      vrb::Matrix eyeTransform = XrPoseToMatrix(view.pose);
+      m.cameras[i]->SetEyeTransform(eyeTransform);
       if (m.immersiveDisplay) {
-        m.immersiveDisplay->SetEyeOffset(eye, view.pose.position.x, view.pose.position.y, view.pose.position.z);
+        m.immersiveDisplay->SetEyeTransform(eye, eyeTransform);
       }
     }
   }
