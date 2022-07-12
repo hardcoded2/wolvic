@@ -5,6 +5,8 @@
 
 package com.igalia.wolvic;
 
+import static com.igalia.wolvic.ui.widgets.UIWidget.REMOVE_WIDGET;
+
 import android.content.BroadcastReceiver;
 import android.content.ComponentCallbacks2;
 import android.content.Context;
@@ -42,14 +44,12 @@ import androidx.lifecycle.LifecycleRegistry;
 import androidx.lifecycle.ViewModelStore;
 import androidx.lifecycle.ViewModelStoreOwner;
 
-import org.json.JSONObject;
-import org.mozilla.geckoview.GeckoRuntime;
-import org.mozilla.geckoview.GeckoSession;
-import org.mozilla.geckoview.GeckoVRManager;
 import com.igalia.wolvic.audio.AudioEngine;
 import com.igalia.wolvic.browser.Accounts;
 import com.igalia.wolvic.browser.PermissionDelegate;
 import com.igalia.wolvic.browser.SettingsStore;
+import com.igalia.wolvic.browser.api.WRuntime;
+import com.igalia.wolvic.browser.api.WSession;
 import com.igalia.wolvic.browser.engine.EngineProvider;
 import com.igalia.wolvic.browser.engine.Session;
 import com.igalia.wolvic.browser.engine.SessionStore;
@@ -83,9 +83,10 @@ import com.igalia.wolvic.utils.BitmapCache;
 import com.igalia.wolvic.utils.ConnectivityReceiver;
 import com.igalia.wolvic.utils.DeviceType;
 import com.igalia.wolvic.utils.LocaleUtils;
-import com.igalia.wolvic.utils.ServoUtils;
 import com.igalia.wolvic.utils.StringUtils;
 import com.igalia.wolvic.utils.SystemUtils;
+
+import org.json.JSONObject;
 
 import java.io.File;
 import java.util.ArrayList;
@@ -96,9 +97,7 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
 
-import static com.igalia.wolvic.ui.widgets.UIWidget.REMOVE_WIDGET;
-
-public class VRBrowserActivity extends com.igalia.wolvic.PlatformActivity implements WidgetManagerDelegate, ComponentCallbacks2, LifecycleOwner, ViewModelStoreOwner {
+public class VRBrowserActivity extends PlatformActivity implements WidgetManagerDelegate, ComponentCallbacks2, LifecycleOwner, ViewModelStoreOwner {
 
     private BroadcastReceiver mCrashReceiver = new BroadcastReceiver() {
         @Override
@@ -374,12 +373,12 @@ public class VRBrowserActivity extends com.igalia.wolvic.PlatformActivity implem
         addWidgets(Arrays.asList(mRootWidget, mNavigationBar, mKeyboard, mTray, mWebXRInterstitial));
 
         // Show the what's upp dialog if we haven't showed it yet and this is v6.
-        /*if (!SettingsStore.getInstance(this).isWhatsNewDisplayed()) {
+        if (!SettingsStore.getInstance(this).isWhatsNewDisplayed()) {
             mWhatsNewWidget = new WhatsNewWidget(this);
             mWhatsNewWidget.setLoginOrigin(Accounts.LoginOrigin.NONE);
             mWhatsNewWidget.getPlacement().parentHandle = mWindows.getFocusedWindow().getHandle();
             mWhatsNewWidget.show(UIWidget.REQUEST_FOCUS);
-        }*/
+        }
 
         mWindows.restoreSessions();
     }
@@ -395,6 +394,10 @@ public class VRBrowserActivity extends com.igalia.wolvic.PlatformActivity implem
             updateWidget(mKeyboard);
             updateWidget(mTray);
         }
+    }
+
+    WRuntime.CrashReportIntent getCrashReportIntent() {
+        return EngineProvider.INSTANCE.getOrCreateRuntime(this).getCrashReportIntent();
     }
 
     @Override
@@ -529,7 +532,7 @@ public class VRBrowserActivity extends com.igalia.wolvic.PlatformActivity implem
         super.onNewIntent(intent);
         setIntent(intent);
 
-        if (GeckoRuntime.ACTION_CRASHED.equals(intent.getAction())) {
+        if (getCrashReportIntent().action_crashed.equals(intent.getAction())) {
             Log.e(LOGTAG, "Restarted after a crash");
         } else {
             loadFromIntent(intent);
@@ -557,7 +560,7 @@ public class VRBrowserActivity extends com.igalia.wolvic.PlatformActivity implem
     }
 
     void loadFromIntent(final Intent intent) {
-        if (GeckoRuntime.ACTION_CRASHED.equals(intent.getAction())) {
+        if (getCrashReportIntent().action_crashed.equals(intent.getAction())) {
             Log.e(LOGTAG,"Loading from crash Intent");
         }
 
@@ -682,11 +685,11 @@ public class VRBrowserActivity extends com.igalia.wolvic.PlatformActivity implem
 
     private void handleContentCrashIntent(@NonNull final Intent intent) {
         Log.e(LOGTAG, "Got content crashed intent");
-        final String dumpFile = intent.getStringExtra(GeckoRuntime.EXTRA_MINIDUMP_PATH);
-        final String extraFile = intent.getStringExtra(GeckoRuntime.EXTRA_EXTRAS_PATH);
+        final String dumpFile = intent.getStringExtra(getCrashReportIntent().extra_minidump_path);
+        final String extraFile = intent.getStringExtra(getCrashReportIntent().extra_extras_path);
         Log.d(LOGTAG, "Dump File: " + dumpFile);
         Log.d(LOGTAG, "Extras File: " + extraFile);
-        Log.d(LOGTAG, "Fatal: " + intent.getBooleanExtra(GeckoRuntime.EXTRA_CRASH_FATAL, false));
+        Log.d(LOGTAG, "Fatal: " + intent.getBooleanExtra(getCrashReportIntent().extra_crash_fatal, false));
 
         boolean isCrashReportingEnabled = SettingsStore.getInstance(this).isCrashReportingEnabled();
         if (isCrashReportingEnabled) {
@@ -993,8 +996,7 @@ public class VRBrowserActivity extends com.igalia.wolvic.PlatformActivity implem
     @Keep
     @SuppressWarnings("unused")
     void registerExternalContext(long aContext) {
-        ServoUtils.setExternalContext(aContext);
-        GeckoVRManager.setExternalContext(aContext);
+        EngineProvider.INSTANCE.getOrCreateRuntime(this).setExternalVRContext(aContext);
     }
 
     final Object mCompositorLock = new Object();
@@ -1514,11 +1516,6 @@ public class VRBrowserActivity extends com.igalia.wolvic.PlatformActivity implem
     }
 
     @Override
-    public void setIsServoSession(boolean aIsServo) {
-      queueRunnable(() -> setIsServo(aIsServo));
-    }
-
-    @Override
     public void pushWorldBrightness(Object aKey, float aBrightness) {
         if (mCurrentBrightness.second != aBrightness) {
             queueRunnable(() -> setWorldBrightnessNative(aBrightness));
@@ -1597,12 +1594,12 @@ public class VRBrowserActivity extends com.igalia.wolvic.PlatformActivity implem
     }
 
     @Override
-    public void requestPermission(String uri, @NonNull String permission, GeckoSession.PermissionDelegate.Callback aCallback) {
+    public void requestPermission(String uri, @NonNull String permission, WSession.PermissionDelegate.Callback aCallback) {
         Session session = SessionStore.get().getActiveSession();
         if (uri != null && !uri.isEmpty()) {
-            mPermissionDelegate.onAppPermissionRequest(session.getGeckoSession(), uri, permission, aCallback);
+            mPermissionDelegate.onAppPermissionRequest(session.getWSession(), uri, permission, aCallback);
         } else {
-            mPermissionDelegate.onAndroidPermissionsRequest(session.getGeckoSession(), new String[]{permission}, aCallback);
+            mPermissionDelegate.onAndroidPermissionsRequest(session.getWSession(), new String[]{permission}, aCallback);
         }
     }
 

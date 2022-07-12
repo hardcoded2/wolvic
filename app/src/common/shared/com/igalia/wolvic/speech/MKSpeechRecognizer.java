@@ -8,15 +8,12 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
 import com.igalia.wolvic.BuildConfig;
+import com.igalia.wolvic.ui.widgets.dialogs.VoiceSearchWidget;
 import com.igalia.wolvic.utils.StringUtils;
+import com.igalia.wolvic.utils.SystemUtils;
 import com.meetkai.speechlibrary.ISpeechRecognitionListener;
 import com.meetkai.speechlibrary.MKSpeechService;
 import com.meetkai.speechlibrary.STTResult;
-
-import org.mozilla.geckoview.GeckoWebExecutor;
-
-import com.igalia.wolvic.ui.widgets.dialogs.VoiceSearchWidget;
-import com.igalia.wolvic.utils.SystemUtils;
 
 public class MKSpeechRecognizer implements SpeechRecognizer, ISpeechRecognitionListener {
 
@@ -41,7 +38,7 @@ public class MKSpeechRecognizer implements SpeechRecognizer, ISpeechRecognitionL
     }
 
     @Override
-    public void start(@NonNull Settings settings, @Nullable GeckoWebExecutor executor, @NonNull Callback callback) {
+    public void start(@NonNull Settings settings, @NonNull Callback callback) {
         mkSpeechService = MKSpeechService.getInstance();
         mCallback = callback;
         mkSpeechService.addListener(this);
@@ -49,7 +46,12 @@ public class MKSpeechRecognizer implements SpeechRecognizer, ISpeechRecognitionL
         if (StringUtils.isEmpty(key)) {
             key = DEBUG_API_KEY;
         }
-        mkSpeechService.start(mContext, settings.locale, key);
+        if (!supportsASR(settings)) {
+            callback.onError(Callback.ERROR_LANGUAGE_NOT_SUPPORTED, "language not supported");
+            stop();
+        } else {
+            mkSpeechService.start(mContext, settings.locale, key);
+        }
     }
 
     @Override
@@ -94,6 +96,11 @@ public class MKSpeechRecognizer implements SpeechRecognizer, ISpeechRecognitionL
 
     public void removeListener() {
         mkSpeechService.removeListener(this);
+    }
+
+    @Override
+    public boolean supportsASR(@NonNull Settings settings) {
+        return mkSpeechService.supportsLocale(settings.locale);
     }
 
     @Override
