@@ -59,7 +59,13 @@ class DisplayLanguageOptionsView extends SettingsView {
 
         String languageId = LocaleUtils.getDisplayLanguageId(getContext());
         mBinding.languageRadio.setOnCheckedChangeListener(mLanguageListener);
-        setLanguage(LocaleUtils.getIndexForSupportedLanguageId(languageId), false);
+        try {
+            setLanguage(LocaleUtils.getIndexForSupportedLanguageId(languageId), false);
+        } catch (IllegalStateException e) {
+            // This is very unlikely and should only happen when the language selected in the
+            // settings is removed from the list of supported languages.
+            reset();
+        }
     }
 
     @Override
@@ -96,8 +102,8 @@ class DisplayLanguageOptionsView extends SettingsView {
 
     @Override
     public Point getDimensions() {
-        return new Point( WidgetPlacement.dpDimension(getContext(), R.dimen.settings_dialog_width),
-                WidgetPlacement.dpDimension(getContext(), R.dimen.settings_dialog_height));
+        return new Point(WidgetPlacement.dpDimension(getContext(), R.dimen.settings_dialog_width),
+                WidgetPlacement.dpDimension(getContext(), R.dimen.language_options_height));
     }
 
     @Override

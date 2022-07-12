@@ -9,6 +9,16 @@ import android.content.Context
 import android.net.Uri
 import android.os.Build
 import androidx.lifecycle.ProcessLifecycleOwner
+import com.igalia.wolvic.BuildConfig
+import com.igalia.wolvic.R
+import com.igalia.wolvic.browser.api.WAllowOrDeny
+import com.igalia.wolvic.browser.api.WResult
+import com.igalia.wolvic.browser.api.WSession
+import com.igalia.wolvic.browser.engine.EngineProvider
+import com.igalia.wolvic.telemetry.TelemetryService
+import com.igalia.wolvic.ui.widgets.WidgetManagerDelegate
+import com.igalia.wolvic.utils.ConnectivityReceiver
+import com.igalia.wolvic.utils.SystemUtils
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -23,23 +33,14 @@ import mozilla.components.support.base.log.logger.Logger
 import mozilla.components.support.base.log.sink.AndroidLogSink
 import mozilla.components.support.rusthttp.RustHttpConfig
 import mozilla.components.support.rustlog.RustLog
-import org.mozilla.geckoview.AllowOrDeny
-import org.mozilla.geckoview.GeckoResult
-import org.mozilla.geckoview.GeckoSession
-import com.igalia.wolvic.R
-import com.igalia.wolvic.browser.engine.EngineProvider
-import com.igalia.wolvic.telemetry.TelemetryService
-import com.igalia.wolvic.ui.widgets.WidgetManagerDelegate
-import com.igalia.wolvic.utils.ConnectivityReceiver
-import com.igalia.wolvic.utils.SystemUtils
 
 
-class Services(val context: Context, places: Places): GeckoSession.NavigationDelegate {
+class Services(val context: Context, places: Places): WSession.NavigationDelegate {
 
     private val LOGTAG = SystemUtils.createLogtag(Services::class.java)
 
     companion object {
-        const val CLIENT_ID = "7ad9917f6c55fb77"
+        const val CLIENT_ID = "a2270f727f45f648"
         const val REDIRECT_URL = "urn:ietf:wg:oauth:2.0:oob:oauth-redirect-webchannel"
     }
     interface TabReceivedDelegate {
@@ -84,7 +85,7 @@ class Services(val context: Context, places: Places): GeckoSession.NavigationDel
             }
         }
     }
-    val serverConfig = ServerConfig(Server.RELEASE, CLIENT_ID, REDIRECT_URL)
+    val serverConfig = ServerConfig(if (BuildConfig.FXA_USE_CHINA_SERVER) Server.CHINA else Server.RELEASE, CLIENT_ID, REDIRECT_URL)
 
     val accountManager = FxaAccountManager(
         context = context,
@@ -120,7 +121,7 @@ class Services(val context: Context, places: Places): GeckoSession.NavigationDel
         }
     }
 
-    override fun onLoadRequest(geckoSession: GeckoSession, loadRequest: GeckoSession.NavigationDelegate.LoadRequest): GeckoResult<AllowOrDeny>? {
+    override fun onLoadRequest(aSession: WSession, loadRequest: WSession.NavigationDelegate.LoadRequest): WResult<WAllowOrDeny>? {
         if (loadRequest.uri.startsWith(REDIRECT_URL)) {
             val parsedUri = Uri.parse(loadRequest.uri)
 
@@ -128,27 +129,27 @@ class Services(val context: Context, places: Places): GeckoSession.NavigationDel
                 val state = parsedUri.getQueryParameter("state") as String
                 val action = parsedUri.getQueryParameter("action") as String
 
-                val geckoResult = GeckoResult<AllowOrDeny>()
+                val wResult = WResult.create<WAllowOrDeny>();
 
                 // Notify the state machine about our success.
                 CoroutineScope(Dispatchers.Main).launch {
                     val result = accountManager.finishAuthentication(FxaAuthData(action.toAuthType(), code = code, state = state))
                     if (!result) {
                         android.util.Log.e(LOGTAG, "Authentication finish error.")
-                        geckoResult.complete(AllowOrDeny.DENY)
+                        wResult.complete(WAllowOrDeny.DENY)
 
                     } else {
                         android.util.Log.e(LOGTAG, "Authentication successfully completed.")
-                        geckoResult.complete(AllowOrDeny.ALLOW)
+                        wResult.complete(WAllowOrDeny.ALLOW)
                     }
                 }
 
-                return geckoResult
+                return wResult
             }
-            return GeckoResult.deny()
+            return WResult.deny()
         }
 
-        return GeckoResult.allow()
+        return WResult.allow()
     }
 
 }

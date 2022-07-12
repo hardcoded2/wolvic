@@ -111,6 +111,7 @@ struct DeviceDelegateOculusVR::State {
   vrb::Matrix reorientMatrix = vrb::Matrix::Identity();
   device::CPULevel minCPULevel = device::CPULevel::Normal;
   device::DeviceType deviceType = device::UnknownType;
+  float ipd = 0.0f;
 
   void UpdatePerspective() {
     float fovX = vrapi_GetSystemPropertyFloat(&java, VRAPI_SYS_PROP_SUGGESTED_EYE_FOV_DEGREES_X);
@@ -173,12 +174,12 @@ struct DeviceDelegateOculusVR::State {
     const char * appId = OCULUS_6DOF_APP_ID;
 
     const int type = vrapi_GetSystemPropertyInt(&java, VRAPI_SYS_PROP_DEVICE_TYPE);
-    if ((type >= VRAPI_DEVICE_TYPE_OCULUSQUEST_START) && (type <= VRAPI_DEVICE_TYPE_OCULUSQUEST_END)) {
+    if ((type >= VRAPI_DEVICE_TYPE_OCULUSQUEST2_START) && (type <= VRAPI_DEVICE_TYPE_OCULUSQUEST2_END)) {
+      VRB_DEBUG("Detected Oculus Quest 2");
+      deviceType = device::OculusQuest2;
+    } else if ((type >= VRAPI_DEVICE_TYPE_OCULUSQUEST_START) && (type <= VRAPI_DEVICE_TYPE_OCULUSQUEST_END)) {
       VRB_DEBUG("Detected Oculus Quest");
       deviceType = device::OculusQuest;
-    } else if ((type >= VRAPI_DEVICE_TYPE_OCULUSQUEST2_START) && (type <= VRAPI_DEVICE_TYPE_OCULUSQUEST2_END)) {
-        VRB_DEBUG("Detected Oculus Quest 2");
-        deviceType = device::OculusQuest2;
     } else {
       VRB_DEBUG("Detected Unknown Oculus device");
     }
@@ -233,10 +234,12 @@ struct DeviceDelegateOculusVR::State {
   }
 
   void UpdateDisplayRefreshRate() {
-    if (!ovr || !IsOculusGo()) {
+    if (!ovr) {
       return;
     }
-    if (renderMode == device::RenderMode::StandAlone) {
+    if (IsOculusQuest2()) {
+      vrapi_SetDisplayRefreshRate(ovr, 90.0f);
+    } else if (IsOculusQuest()) {
       vrapi_SetDisplayRefreshRate(ovr, 72.0f);
     } else {
       vrapi_SetDisplayRefreshRate(ovr, 60.0f);
@@ -284,8 +287,12 @@ struct DeviceDelegateOculusVR::State {
     aHeight = (uint32_t)(scale * vrapi_GetSystemPropertyInt(&java, VRAPI_SYS_PROP_SUGGESTED_EYE_TEXTURE_HEIGHT));
   }
 
+  bool IsOculusQuest2() const {
+    return deviceType == device::OculusQuest2;
+  }
+  
   bool IsOculusQuest() const {
-    return deviceType == device::OculusQuest || deviceType == device::OculusQuest2;
+    return deviceType == device::OculusQuest;
   }
 
   bool IsOculusGo() const {
@@ -295,7 +302,7 @@ struct DeviceDelegateOculusVR::State {
   bool Is6DOF() const {
     // ovrInputHeadsetCapabilities is unavailable in Oculus mobile SDK,
     // the current workaround is checking if it is Quest.
-    return IsOculusQuest();
+    return IsOculusQuest() || IsOculusQuest2();
   }
 
   void SetRenderSize(device::RenderMode aRenderMode) {
@@ -392,11 +399,15 @@ struct DeviceDelegateOculusVR::State {
                                          controllerName, beamTransform);
             controller->SetButtonCount(controllerState.index, 7);
             controller->SetHapticCount(controllerState.index, 1);
-            controller->SetControllerType(controllerState.index, device::OculusQuest);
+            controller->SetControllerType(controllerState.index, deviceType);
 
             float offsetX = controllerState.hand == ElbowModel::HandEnum::Left ? 0.011f : -0.011f;
             const vrb::Matrix trans = vrb::Matrix::Position(vrb::Vector(offsetX, 0.025f, 0.05f));
-            controller->SetImmersiveBeamTransform(controllerState.index, trans);
+
+            // Apply a 45º rotation to controller in immersive mode.
+            vrb::Matrix transform = vrb::Matrix::Rotation(vrb::Vector(1.0f, 0.0f, 0.0f), M_PI_4);
+            transform = transform.PostMultiply(trans);
+            controller->SetImmersiveBeamTransform(controllerState.index, transform);
           } else {
             // Oculus Go only has one kind of controller model.
             controller->CreateController(controllerState.index, 0, "Oculus Go Controller");
@@ -468,16 +479,10 @@ struct DeviceDelegateOculusVR::State {
       controller->SetCapabilityFlags(controllerState.index, flags);
       if (renderMode == device::RenderMode::Immersive) {
         static vrb::Matrix transform(vrb::Matrix::Identity());
-        if (transform.IsIdentity()) {
-          if (controllerState.Is6DOF()) {
-            transform = vrb::Matrix::Rotation(vrb::Vector(1.0f, 0.0f, 0.0f), 0.77f);
-            const vrb::Matrix trans = vrb::Matrix::Position(vrb::Vector(0.0f, 0.0f, 0.025f));
-            transform = transform.PostMultiply(trans);
-          } else {
-            transform = vrb::Matrix::Rotation(vrb::Vector(1.0f, 0.0f, 0.0f), 0.60f);
-          }
+        if (transform.IsIdentity() && !controllerState.Is6DOF()) {
+          transform = vrb::Matrix::Rotation(vrb::Vector(1.0f, 0.0f, 0.0f), 0.60f);
+          controllerState.transform = controllerState.transform.PostMultiply(transform);
         }
-        controllerState.transform = controllerState.transform.PostMultiply(transform);
       }
       controller->SetTransform(controllerState.index, controllerState.transform);
 
@@ -747,7 +752,9 @@ DeviceDelegateOculusVR::RegisterImmersiveDisplay(ImmersiveDisplayPtr aDisplay) {
     return;
   }
 
-  if (m.IsOculusQuest()) {
+  if (m.IsOculusQuest2()) {
+    m.immersiveDisplay->SetDeviceName("Oculus Quest 2");
+  } else if (m.IsOculusQuest()) {
     m.immersiveDisplay->SetDeviceName("Oculus Quest");
   } else {
     m.immersiveDisplay->SetDeviceName("Oculus Go");
@@ -834,7 +841,7 @@ DeviceDelegateOculusVR::ReleaseControllerDelegate() {
 
 int32_t
 DeviceDelegateOculusVR::GetControllerModelCount() const {
-  if (m.IsOculusQuest()) {
+  if (m.IsOculusQuest() || m.IsOculusQuest2()) {
     return 2;
   } else {
     return 1;
@@ -845,7 +852,20 @@ const std::string
 DeviceDelegateOculusVR::GetControllerModelName(const int32_t aModelIndex) const {
   static std::string name = "";
 
-  if (m.IsOculusQuest()) {
+  if (m.IsOculusQuest2()) {
+    switch (aModelIndex) {
+      case 0:
+        name = "vr_controller_oculusquest2_left.obj";
+        break;
+      case 1:
+        name = "vr_controller_oculusquest2_right.obj";
+        break;
+      default:
+        VRB_WARN("GetControllerModelName() failed.");
+        name = "";
+        break;
+    }
+  } else if (m.IsOculusQuest()) {
     switch (aModelIndex) {
       case 0:
         name = "vr_controller_oculusquest_left.obj";
@@ -989,7 +1009,8 @@ DeviceDelegateOculusVR::StartFrame(const FramePrediction aPrediction) {
   ovrMatrix4f matrix = vrapi_GetTransformFromPose(&m.predictedTracking.HeadPose.Pose);
   vrb::Matrix head = vrb::Matrix::FromRowMajor(matrix.M[0]);
 
-  if (m.renderMode == device::RenderMode::StandAlone) {
+  if (m.renderMode == device::RenderMode::StandAlone &&
+      (m.predictedTracking.Status & VRAPI_TRACKING_STATUS_POSITION_TRACKED)) {
     head.TranslateInPlace(kAverageHeight);
   }
 
@@ -1010,6 +1031,13 @@ DeviceDelegateOculusVR::StartFrame(const FramePrediction aPrediction) {
       caps |= device::PositionEmulated;
     }
     m.immersiveDisplay->SetCapabilityFlags(caps);
+  }
+
+  // Changes in IPD might cause distortions in WebXR when rotating the headset unless we update
+  // the perspective projection.
+  if (ipd != m.ipd) {
+    m.ipd = ipd;
+    m.UpdatePerspective();
   }
 
   int lastReorientCount = m.reorientCount;
