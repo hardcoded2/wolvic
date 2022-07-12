@@ -181,9 +181,7 @@ public class SettingsWidget extends UIDialog implements SettingsView.Delegate {
         try {
             PackageInfo pInfo = getContext().getPackageManager().getPackageInfo(getContext().getPackageName(), 0);
             String app_name = getResources().getString(R.string.app_name);
-            String[] app_name_parts = app_name.split(" ");
-            mBinding.versionText.setText(Html.fromHtml("<b>" + app_name_parts[0] + "</b>" +
-                            " " + app_name_parts[1] + " " +
+            mBinding.versionText.setText(Html.fromHtml("<b>" + app_name + "</b>" +
                             " <b>" + pInfo.versionName + "</b>",
                     Html.FROM_HTML_MODE_LEGACY));
 
@@ -191,7 +189,7 @@ public class SettingsWidget extends UIDialog implements SettingsView.Delegate {
             e.printStackTrace();
         }
 
-        mBinding.buildText.setText(StringUtils.versionCodeToDate(getContext(), BuildConfig.VERSION_CODE));
+        mBinding.buildText.setText("versionCode " + BuildConfig.VERSION_CODE);
 
         final GestureDetector gd = new GestureDetector(getContext(), new VersionGestureListener());
         mBinding.settingsMasthead.setOnTouchListener((view, motionEvent) -> {
@@ -459,6 +457,12 @@ public class SettingsWidget extends UIDialog implements SettingsView.Delegate {
                 break;
             case SEARCH_ENGINE:
                 showView(new SearchEngineView(getContext(), mWidgetManager));
+                break;
+            case TERMS_OF_SERVICE:
+                showView(new LegalDocumentView(getContext(), mWidgetManager, LegalDocumentView.LegalDocument.TERMS_OF_SERVICE));
+                break;
+            case PRIVACY_POLICY:
+                showView(new LegalDocumentView(getContext(), mWidgetManager, LegalDocumentView.LegalDocument.PRIVACY_POLICY));
                 break;
         }
     }

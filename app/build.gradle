@@ -80,11 +80,14 @@ android {
         applicationId "com.igalia.wolvic"
         minSdkVersion build_versions.min_sdk
         targetSdkVersion build_versions.target_sdk
-        versionCode 26
-        versionName "0.9.5"
+        versionCode 33
+        versionName "0.9.6"
         buildConfigField "String", "GIT_HASH", "\"${getGitHash()}\""
         buildConfigField "Boolean", "DISABLE_CRASH_RESTART", getCrashRestartDisabled()
         buildConfigField "String", "AMO_COLLECTION", "\"fxr\""
+        buildConfigField "int", "MSAA_LEVEL", "1"
+        buildConfigField "Boolean", "WEBVIEW_IN_PHONE_UI", "false"
+        buildConfigField "Boolean", "FXA_USE_CHINA_SERVER", "false"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         externalNativeBuild {
             cmake {
@@ -151,7 +154,7 @@ android {
         abortOnError false
     }
 
-    flavorDimensions "platform", "abi"
+    flavorDimensions "platform", "abi", "country"
 
     productFlavors {
         // Supported platforms
@@ -246,6 +249,7 @@ android {
             }
             buildConfigField "String", "HVR_ML_API_KEY", "\"${getHVRMLApiKey()}\""
             buildConfigField "String", "MK_API_KEY", "\"\""
+            buildConfigField "int", "MSAA_LEVEL", "0"
         }
 
         hvr3dof {
@@ -259,6 +263,16 @@ android {
             }
             buildConfigField "String", "HVR_ML_API_KEY", "\"${getHVRMLApiKey()}\""
             buildConfigField "String", "MK_API_KEY", "\"\""
+            buildConfigField "int", "MSAA_LEVEL", "0"
+        }
+
+        cn {
+            dimension "country"
+            buildConfigField "Boolean", "FXA_USE_CHINA_SERVER", "true"
+        }
+
+        world {
+            dimension "country"
         }
 
         noapi {
@@ -288,31 +302,17 @@ android {
     }
 
     variantFilter { variant ->
-        def needed = variant.name in [
-                'oculusvrArm64Debug',
-                'oculusvrArm64Release',
-                'oculusvrStoreArm64Debug',
-                'oculusvrStoreArm64Release',
-                'oculusvr3dofStoreArm64Debug',
-                'oculusvr3dofStoreArm64Release',
-                'picovrArm64Debug',
-                'picovrArm64Release',
-                'picovrStoreArm64Debug',
-                'picovrStoreArm64Release',
-                'wavevrArm64Debug',
-                'wavevrArm64Release',
-                'wavevrStoreArm64Debug',
-                'wavevrStoreArm64Release',
-                'noapiArm64Debug',
-                'noapiArm64Release',
-                'noapiX86_64Debug',
-                'noapiX86_64Release',
-                'hvrArm64Debug',
-                'hvrArm64Release',
-                'hvr3dofArm64Debug',
-                'hvr3dofArm64Release'
-        ]
-        variant.setIgnore(!needed)
+        def platform = variant.getFlavors().get(0).name
+        def abi = variant.getFlavors().get(1).name
+        def country = variant.getFlavors().get(2).name
+
+        // Create x86_64 variants only for noapi platform
+        if (abi == 'x86_64')
+            variant.setIgnore(platform != 'noapi');
+
+        // Create variants for China only for HVR platforms
+        if (country == 'cn' && !platform.startsWith('hvr'))
+            variant.setIgnore(true);
     }
 
 
@@ -362,29 +362,29 @@ android {
             ]
         }
 
-        oculusvrArm64Debug {
+        oculusvrArm64WorldDebug {
             manifest.srcFile "src/oculusvrArmDebug/AndroidManifest.xml"
         }
 
-        oculusvrArm64Release {
+        oculusvrArm64WorldRelease {
             manifest.srcFile getUseDebugSigningOnRelease() ? "src/oculusvrArmDebug/AndroidManifest.xml"
                                                            : "src/oculusvrArmRelease/AndroidManifest.xml"
         }
 
-        oculusvrStoreArm64Debug {
+        oculusvrStoreArm64WorldDebug {
             manifest.srcFile "src/oculusvrArmDebug/AndroidManifest.xml"
         }
 
-        oculusvrStoreArm64Release {
+        oculusvrStoreArm64WorldRelease {
             manifest.srcFile getUseDebugSigningOnRelease() ? "src/oculusvrArmDebug/AndroidManifest.xml"
                     : "src/oculusvrArmRelease/AndroidManifest.xml"
         }
 
-        oculusvr3dofStoreArm64Debug {
+        oculusvr3dofStoreArm64WorldDebug {
             manifest.srcFile "src/oculusvrArmDebug/AndroidManifest.xml"
         }
 
-        oculusvr3dofStoreArm64Release {
+        oculusvr3dofStoreArm64WorldRelease {
             manifest.srcFile getUseDebugSigningOnRelease() ? "src/oculusvrArmDebug/AndroidManifest.xml"
                     : "src/oculusvrArmRelease/AndroidManifest.xml"
         }
@@ -608,7 +608,7 @@ if(true) {
 }
 
 dependencies {
-    implementation 'com.google.android.material:material:1.0.0'
+    implementation "com.google.android.material:material:$versions.support"
     implementation 'androidx.viewpager2:viewpager2:1.0.0'
     // "nightly" or "beta" or "release"
     def branch = "nightly"
@@ -628,6 +628,15 @@ if (gradle.hasProperty('localProperties.dependencySubstitutions.geckoviewTopsrcd
     apply from: "${topsrcdir}/substitute-local-geckoview.gradle"
 }
 
+androidComponents {
+    onVariants(selector().all(), { variant ->
+        // HVR packages for China must use different applicationIds.
+        def hvrChinaBuildPattern = ~/hvr\p{Alnum}+Cn(Release|Debug)/
+        if (hvrChinaBuildPattern.matcher(variant.name).matches())
+            variant.applicationId = variant.applicationId.get().replace('com.igalia','cn.igalia')
+    })
+}
+
 // -------------------------------------------------------------------------------------------------
 // MLS: Read token from local file if it exists
 // -------------------------------------------------------------------------------------------------
@@ -644,4 +653,9 @@ android.applicationVariants.all { variant ->
         println("X_X")
     }
 
+    def platform = variant.productFlavors.get(0).name
+    def country = variant.productFlavors.get(2).name
+
+    if (platform.toLowerCase().startsWith('hvr') && country != 'cn')
+        variant.buildConfigField "Boolean", "WEBVIEW_IN_PHONE_UI", "true"
 }

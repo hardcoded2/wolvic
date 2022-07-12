@@ -91,7 +91,7 @@ public class SettingsStore {
     public final static int POINTER_COLOR_DEFAULT_DEFAULT = Color.parseColor("#FFFFFF");
     public final static int SCROLL_DIRECTION_DEFAULT = 0;
     public final static String ENV_DEFAULT = "wolvic";
-    public final static int MSAA_DEFAULT_LEVEL = 1;
+    public final static int MSAA_DEFAULT_LEVEL = BuildConfig.MSAA_LEVEL;
     public final static boolean AUDIO_ENABLED = false;
     public final static float CYLINDER_DENSITY_ENABLED_DEFAULT = 4680.0f;
     private final static long CRASH_RESTART_DELTA = 2000;
@@ -107,8 +107,7 @@ public class SettingsStore {
     public final static long FXA_LAST_SYNC_NEVER = 0;
     public final static boolean RESTORE_TABS_ENABLED = true;
     public final static boolean BYPASS_CACHE_ON_RELOAD = false;
-    public final static int DOWNLOADS_STORAGE_DEFAULT = INTERNAL;
-    public final static int DOWNLOADS_SORTING_ORDER_DEFAULT = SortingContextMenuWidget.SORT_DATE_ASC;
+    public final static int DOWNLOADS_SORTING_ORDER_DEFAULT = SortingContextMenuWidget.SORT_DATE_DESC;
     public final static boolean AUTOCOMPLETE_ENABLED = true;
     public final static boolean WEBGL_OUT_OF_PROCESS = false;
     public final static int PREFS_LAST_RESET_VERSION_CODE = 0;
@@ -740,16 +739,6 @@ public class SettingsStore {
         return mPrefs.getBoolean(mContext.getString(R.string.settings_key_bypass_cache_on_reload), BYPASS_CACHE_ON_RELOAD);
     }
 
-    public void setDownloadsStorage(@Storage int storage) {
-        SharedPreferences.Editor editor = mPrefs.edit();
-        editor.putInt(mContext.getString(R.string.settings_key_downloads_external), storage);
-        editor.commit();
-    }
-
-    public @Storage int getDownloadsStorage() {
-        return mPrefs.getInt(mContext.getString(R.string.settings_key_downloads_external), DOWNLOADS_STORAGE_DEFAULT);
-    }
-
     public void setDownloadsSortingOrder(@SortingContextMenuWidget.Order int order) {
         SharedPreferences.Editor editor = mPrefs.edit();
         editor.putInt(mContext.getString(R.string.settings_key_downloads_sorting_order), order);
@@ -890,6 +879,16 @@ public class SettingsStore {
 
     public String getTabAfterRestore() {
         return mPrefs.getString(mContext.getString(R.string.settings_key_tab_after_restore), null);
+    }
+
+    public void setTermsServiceAccepted(boolean isAccepted) {
+        SharedPreferences.Editor editor = mPrefs.edit();
+        editor.putBoolean(mContext.getString(R.string.settings_key_terms_service_accepted), isAccepted);
+        editor.commit();
+    }
+
+    public boolean isTermsServiceAccepted() {
+        return mPrefs.getBoolean(mContext.getString(R.string.settings_key_terms_service_accepted), false);
     }
 
     public void setPrivacyPolicyAccepted(boolean isAccepted) {
