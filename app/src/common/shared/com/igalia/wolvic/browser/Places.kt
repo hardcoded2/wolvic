@@ -7,6 +7,8 @@ package com.igalia.wolvic.browser
 
 import android.content.Context
 import android.util.Log
+import com.igalia.wolvic.browser.engine.SessionStore
+import com.igalia.wolvic.utils.SystemUtils
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -16,8 +18,6 @@ import mozilla.components.lib.dataprotect.SecureAbove22Preferences
 import mozilla.components.lib.dataprotect.generateEncryptionKey
 import mozilla.components.service.sync.logins.SyncableLoginsStorage
 import mozilla.components.support.base.log.logger.Logger
-import com.igalia.wolvic.browser.engine.SessionStore
-import com.igalia.wolvic.utils.SystemUtils
 
 /**
  * Entry point for interacting with places-backed storage layers.
@@ -90,6 +90,17 @@ class Places(var context: Context) {
             // The login storage has a wipe method the should bring us back to the state before the first sync
             // (although it actually just deletes everything) so there is no need to delete the whole database.
             logins.value.wipeLocal()
+        }
+    }
+
+    fun clearLoginsDatabaseUglyHack() {
+        // This is the ugliest part of this hack. We're using the name extracted from the sources of the
+        // mozilla-components. That database file should be totally opaque to us, but that's what it is as
+        // long as mozilla-components don't provide a better solution for clients.
+        var loginsDatabase = context.getDatabasePath("logins.sqlite")
+        if (loginsDatabase != null) {
+            if (loginsDatabase.delete())
+                Logger.warn("Force-deleted logins database ${loginsDatabase.absolutePath}")
         }
     }
 }

@@ -22,14 +22,8 @@ namespace crow {
         Iterator end() const { return Iterator(static_cast<int>(T::enum_count)); }
     };
 
-#ifdef HVR
-    // Workaround for SDK bug
-    constexpr const char* kPathLeftHand { "/user/hand/right" };
-    constexpr const char* kPathRightHand { "/user/hand/left" };
-#else
     constexpr const char* kPathLeftHand { "/user/hand/left" };
     constexpr const char* kPathRightHand { "/user/hand/right" };
-#endif
     constexpr const char* kPathGripPose { "input/grip/pose" };
     constexpr const char* kPathAimPose { "input/aim/pose" };
     constexpr const char* kPathTrigger { "input/trigger" };
@@ -39,6 +33,7 @@ namespace crow {
     constexpr const char* kPathTrackpad { "input/trackpad" };
     constexpr const char* kPathSelect { "/input/select" };
     constexpr const char* kPathMenu { "input/menu" };
+    constexpr const char* kPathHaptic { "output/haptic" };
     constexpr const char* kPathButtonA { "input/a" };
     constexpr const char* kPathButtonB { "input/b" };
     constexpr const char* kPathButtonX { "input/x" };
@@ -112,6 +107,11 @@ namespace crow {
         OpenXRHandFlags hand;
     };
 
+    struct OpenXRHaptic {
+        OpenXRButtonPath path;
+        OpenXRHandFlags hand;
+    };
+
     struct OpenXRInputMapping {
         const char* const path { nullptr };
         const char* const systemFilter {nullptr };
@@ -121,13 +121,14 @@ namespace crow {
         std::vector<OpenXRInputProfile> profiles;
         std::vector<OpenXRButton> buttons;
         std::vector<OpenXRAxis> axes;
+        std::vector<OpenXRHaptic> haptics;
     };
 
     /*
      * Mappings
      */
 
-    // Oculus Touch:  https://github.com/immersive-web/webxr-input-profiles/blob/master/packages/registry/profiles/oculus/oculus-touch-v2.json
+    // Oculus Touch v2:  https://github.com/immersive-web/webxr-input-profiles/blob/master/packages/registry/profiles/oculus/oculus-touch-v2.json
     const OpenXRInputMapping OculusTouch {
         "/interaction_profiles/oculus/touch_controller",
         "Oculus Quest",
@@ -148,16 +149,19 @@ namespace crow {
         },
         std::vector<OpenXRAxis> {
             { OpenXRAxisType::Thumbstick, kPathThumbstick,  OpenXRHandFlags::Both },
-        }
+        },
+        std::vector<OpenXRHaptic> {
+            { kPathHaptic, OpenXRHandFlags::Right },
+        },
     };
 
-    // Oculus Touch2:  https://github.com/immersive-web/webxr-input-profiles/blob/master/packages/registry/profiles/oculus/oculus-touch-v3.json
+    // Oculus Touch v3:  https://github.com/immersive-web/webxr-input-profiles/blob/master/packages/registry/profiles/oculus/oculus-touch-v3.json
     const OpenXRInputMapping OculusTouch2 {
             "/interaction_profiles/oculus/touch_controller",
             "Oculus Quest2",
-            "vr_controller_oculusquest_left.obj",
-            "vr_controller_oculusquest_right.obj",
-            device::OculusQuest,
+            "vr_controller_oculusquest2_left.obj",
+            "vr_controller_oculusquest2_right.obj",
+            device::OculusQuest2,
             std::vector<OpenXRInputProfile> { "oculus-touch-v3", "oculus-touch-v2", "oculus-touch", "generic-trigger-squeeze-thumbstick" },
             std::vector<OpenXRButton> {
                     { OpenXRButtonType::Trigger, kPathTrigger, OpenXRButtonFlags::ValueTouch, OpenXRHandFlags::Both },
@@ -172,7 +176,10 @@ namespace crow {
             },
             std::vector<OpenXRAxis> {
                     { OpenXRAxisType::Thumbstick, kPathThumbstick,  OpenXRHandFlags::Both },
-            }
+            },
+            std::vector<OpenXRHaptic> {
+                    { kPathHaptic, OpenXRHandFlags::Both },
+            },
     };
     
     // HVR 3DOF: https://github.com/immersive-web/webxr-input-profiles/blob/master/packages/registry/profiles/generic/generic-trigger-touchpad.json
@@ -190,28 +197,39 @@ namespace crow {
             },
             std::vector<OpenXRAxis> {
                 { OpenXRAxisType::Trackpad, "input/trackpad/value",  OpenXRHandFlags::Both },
-            }
+            },
+            std::vector<OpenXRHaptic> {
+                { kPathHaptic, OpenXRHandFlags::Both },
+            },
     };
 
   const OpenXRInputMapping Hvr6DOF {
-      "/interaction_profiles/huawei/controller",
+      "/interaction_profiles/huawei/6dof_controller",
       "Haliday: G3HMD by Huawei",
       "hvr_6dof_left.obj",
       "hvr_6dof_right.obj",
       device::OculusQuest,
       std::vector<OpenXRInputProfile> { "oculus-touch-v3", "oculus-touch-v2", "oculus-touch", "generic-trigger-squeeze-thumbstick" },
       std::vector<OpenXRButton> {
-          { OpenXRButtonType::Trigger, kPathTrigger, OpenXRButtonFlags::ClickValue, OpenXRHandFlags::Both },
-          { OpenXRButtonType::Squeeze, "input/grip", OpenXRButtonFlags::ClickValue, OpenXRHandFlags::Both },
-          { OpenXRButtonType::Thumbstick, kPathThumbstick, OpenXRButtonFlags::Click, OpenXRHandFlags::Both },
-          { OpenXRButtonType::ButtonX, "input/ax", OpenXRButtonFlags::Click, OpenXRHandFlags::Both },
-          { OpenXRButtonType::ButtonY, "input/by", OpenXRButtonFlags::Click, OpenXRHandFlags::Left, ControllerDelegate::Button::BUTTON_APP },
-          { OpenXRButtonType::ButtonY, "input/by", OpenXRButtonFlags::Click, OpenXRHandFlags::Right },
-          { OpenXRButtonType::Menu, "input/home", OpenXRButtonFlags::Click, OpenXRHandFlags::Left, ControllerDelegate::Button::BUTTON_APP, true }
+          { OpenXRButtonType::ButtonX, kPathButtonX, OpenXRButtonFlags::ClickTouch, OpenXRHandFlags::Left },
+          { OpenXRButtonType::ButtonY, kPathButtonY, OpenXRButtonFlags::ClickTouch, OpenXRHandFlags::Left },
+          { OpenXRButtonType::Menu, kPathMenu, OpenXRButtonFlags::Click, OpenXRHandFlags::Left },
+
+          { OpenXRButtonType::ButtonA, kPathButtonA, OpenXRButtonFlags::ClickTouch, OpenXRHandFlags::Right },
+          { OpenXRButtonType::ButtonB, kPathButtonB, OpenXRButtonFlags::ClickTouch, OpenXRHandFlags::Right },
+          { OpenXRButtonType::Menu, "input/home", OpenXRButtonFlags::Click, OpenXRHandFlags::Right, ControllerDelegate::Button::BUTTON_APP, true },
+
+          { OpenXRButtonType::Trigger, kPathTrigger, OpenXRButtonFlags::ClickValue | OpenXRButtonFlags::Touch, OpenXRHandFlags::Both },
+          { OpenXRButtonType::Thumbstick, kPathThumbstick, OpenXRButtonFlags::ClickTouch, OpenXRHandFlags::Both },
+
+          { OpenXRButtonType::Squeeze,"input/grip", OpenXRButtonFlags::ClickValue | OpenXRButtonFlags::Touch, OpenXRHandFlags::Both }
       },
       std::vector<OpenXRAxis> {
-          { OpenXRAxisType::Thumbstick, "input/trackpad/value",  OpenXRHandFlags::Both },
-      }
+          { OpenXRAxisType::Thumbstick, kPathThumbstick,  OpenXRHandFlags::Both },
+      },
+      std::vector<OpenXRHaptic> {
+          { kPathHaptic, OpenXRHandFlags::Both },
+      },
   };
 
     // Default fallback: https://github.com/immersive-web/webxr-input-profiles/blob/master/packages/registry/profiles/generic/generic-button.json
@@ -225,7 +243,10 @@ namespace crow {
             std::vector<OpenXRButton> {
                     { OpenXRButtonType::Trigger, kPathTrigger, OpenXRButtonFlags::Click, OpenXRHandFlags::Both },
             },
-            {}
+            {},
+            std::vector<OpenXRHaptic> {
+                    { kPathHaptic, OpenXRHandFlags::Both },
+            },
     };
 
 #if defined(HVR_6DOF)
