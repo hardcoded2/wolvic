@@ -644,6 +644,9 @@ public class VRBrowserActivity extends PlatformActivity implements WidgetManager
     @Override
     public void onLowMemory() {
         //TODO: asink: figure out the right method to call
+    }
+
+    @Override
     public void onSharedPreferenceChanged(SharedPreferences sharedPreferences, String key) {
         try {
             if (key.equals(getString(R.string.settings_key_voice_search_service))) {
