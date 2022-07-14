@@ -75,7 +75,7 @@ import com.igalia.wolvic.ui.widgets.WidgetPlacement;
 import com.igalia.wolvic.ui.widgets.WindowWidget;
 import com.igalia.wolvic.ui.widgets.Windows;
 import com.igalia.wolvic.ui.widgets.dialogs.CrashDialogWidget;
-import com.igalia.wolvic.ui.widgets.dialogs.LegalDocumentDialogWidget;
+import com.igalia.wolvic.ui.widgets.dialogs.PrivacyPolicyDialogWidget;
 import com.igalia.wolvic.ui.widgets.dialogs.PromptDialogWidget;
 import com.igalia.wolvic.ui.widgets.dialogs.SendTabDialogWidget;
 import com.igalia.wolvic.ui.widgets.dialogs.WhatsNewWidget;
@@ -374,10 +374,8 @@ public class VRBrowserActivity extends PlatformActivity implements WidgetManager
         addWidgets(Arrays.asList(mRootWidget, mNavigationBar, mKeyboard, mTray, mWebXRInterstitial));
 
         // Show the launch dialogs, if needed.
-        if (!showTermsServiceDialogIfNeeded()) {
-            if (!showPrivacyDialogIfNeeded()) {
-                showWhatsNewDialogIfNeeded();
-            }
+        if (!showPrivacyDialogIfNeeded()) {
+            showWhatsNewDialogIfNeeded();
         }
 
         mWindows.restoreSessions();
@@ -401,39 +399,12 @@ public class VRBrowserActivity extends PlatformActivity implements WidgetManager
     }
 
     // Returns true if the dialog was shown, false otherwise.
-    private boolean showTermsServiceDialogIfNeeded() {
-        if (SettingsStore.getInstance(this).isTermsServiceAccepted()) {
-            return false;
-        }
-
-        LegalDocumentDialogWidget termsServiceDialog =
-                new LegalDocumentDialogWidget(this, LegalDocumentDialogWidget.LegalDocument.TERMS_OF_SERVICE);
-
-        termsServiceDialog.setDelegate(response -> {
-            if (response) {
-                SettingsStore.getInstance(this).setTermsServiceAccepted(true);
-                if (!showPrivacyDialogIfNeeded()) {
-                    showWhatsNewDialogIfNeeded();
-                }
-            } else {
-                // TODO ask for confirmation ("are you really sure that you want to close Wolvic?")
-                Log.w(LOGTAG, "The user rejected the privacy policy, closing the app.");
-                finish();
-            }
-        });
-        termsServiceDialog.attachToWindow(mWindows.getFocusedWindow());
-        termsServiceDialog.show(UIWidget.REQUEST_FOCUS);
-        return true;
-    }
-
-    // Returns true if the dialog was shown, false otherwise.
     private boolean showPrivacyDialogIfNeeded() {
         if (SettingsStore.getInstance(this).isPrivacyPolicyAccepted()) {
             return false;
         }
 
-        LegalDocumentDialogWidget privacyPolicyDialog
-                = new LegalDocumentDialogWidget(this, LegalDocumentDialogWidget.LegalDocument.PRIVACY_POLICY);
+        PrivacyPolicyDialogWidget privacyPolicyDialog = new PrivacyPolicyDialogWidget(this);
         privacyPolicyDialog.setDelegate(response -> {
             if (response) {
                 SettingsStore.getInstance(this).setPrivacyPolicyAccepted(true);
@@ -611,6 +582,11 @@ public class VRBrowserActivity extends PlatformActivity implements WidgetManager
         SendTabDialogWidget.getInstance(this).onConfigurationChanged(newConfig);
 
         super.onConfigurationChanged(newConfig);
+    }
+
+    @Override
+    public void onLowMemory() {
+        //TODO: asink: figure out the right method to call
     }
 
     void loadFromIntent(final Intent intent) {
