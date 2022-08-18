@@ -51,6 +51,7 @@ import com.igalia.wolvic.browser.api.WMediaSession;
 import com.igalia.wolvic.browser.api.WResult;
 import com.igalia.wolvic.browser.api.WSession;
 import com.igalia.wolvic.browser.api.WWebResponse;
+import com.igalia.wolvic.browser.engine.EngineProvider;
 import com.igalia.wolvic.browser.engine.Session;
 import com.igalia.wolvic.browser.engine.SessionState;
 import com.igalia.wolvic.browser.engine.SessionStore;
@@ -140,6 +141,7 @@ public class WindowWidget extends UIWidget implements SessionChangeListener,
     private CopyOnWriteArrayList<Runnable> mSetViewQueuedCalls;
     private SharedPreferences mPrefs;
     private DownloadsManager mDownloadsManager;
+    private float mBrowserDensity;
 
     public interface WindowListener {
         default void onFocusRequest(@NonNull WindowWidget aWindow) {}
@@ -241,7 +243,7 @@ public class WindowWidget extends UIWidget implements SessionChangeListener,
         aPlacement.height = SettingsStore.getInstance(getContext()).getWindowHeight() + mBorderWidth * 2;
         aPlacement.worldWidth = WidgetPlacement.floatDimension(getContext(), R.dimen.window_world_width) *
                 (float)windowWidth / (float)SettingsStore.WINDOW_WIDTH_DEFAULT;
-        aPlacement.density = 1.0f;
+        aPlacement.density = getBrowserDensity();
         aPlacement.visible = true;
         aPlacement.cylinder = true;
         aPlacement.textureScale = 1.0f;
@@ -392,6 +394,15 @@ public class WindowWidget extends UIWidget implements SessionChangeListener,
         }
     }
 
+    private void recreateWidgetSurfaceIfNeeded(float prevDensity) {
+        if (prevDensity != mWidgetPlacement.density || !isLayer())
+            return;
+
+        // If the densities are the same updateWidget won't generate a new surface as the resulting
+        // texture sizes are equal. We need to force a new surface creation when using layers.
+        mWidgetManager.recreateWidgetSurface(this);
+    }
+
     private void setView(View view, boolean switchSurface) {
         Runnable setView = () -> {
             if (switchSurface) {
@@ -404,6 +415,7 @@ public class WindowWidget extends UIWidget implements SessionChangeListener,
             addView(mView);
 
             if (switchSurface) {
+                float prevDensity = mWidgetPlacement.density;
                 mWidgetPlacement.density = getContext().getResources().getDisplayMetrics().density;
                 if (mTexture != null && mSurface != null && mRenderer == null) {
                     // Create the UI Renderer for the current surface.
@@ -416,6 +428,8 @@ public class WindowWidget extends UIWidget implements SessionChangeListener,
                 mWidgetManager.pushBackHandler(mBackHandler);
                 setWillNotDraw(false);
                 postInvalidate();
+
+                recreateWidgetSurfaceIfNeeded(prevDensity);
             }
         };
 
@@ -445,13 +459,15 @@ public class WindowWidget extends UIWidget implements SessionChangeListener,
                     }
                     mSurface = new Surface(mTexture);
                 }
-                mWidgetPlacement.density = 1.0f;
+                float prevDensity = mWidgetPlacement.density;
+                mWidgetPlacement.density = getBrowserDensity();
                 mWidgetManager.updateWidget(WindowWidget.this);
                 mWidgetManager.popWorldBrightness(WindowWidget.this);
                 mWidgetManager.popBackHandler(mBackHandler);
                 if (mTexture != null) {
                     resumeCompositor();
                 }
+                recreateWidgetSurfaceIfNeeded(prevDensity);
             }
         }
     }
@@ -2125,5 +2141,12 @@ public class WindowWidget extends UIWidget implements SessionChangeListener,
 
             return true;
         }
+    }
+
+    private float getBrowserDensity() {
+        if (mBrowserDensity == 0) {
+            mBrowserDensity = EngineProvider.INSTANCE.getOrCreateRuntime(getContext()).getDensity();
+        }
+        return mBrowserDensity;
     }
 }
