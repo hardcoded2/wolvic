@@ -4,8 +4,10 @@ import android.app.Service;
 import android.content.Context;
 import android.content.res.Configuration;
 import android.os.Bundle;
+import android.view.ViewGroup;
 
 import androidx.annotation.NonNull;
+import androidx.fragment.app.FragmentManager;
 
 import com.igalia.wolvic.browser.api.WContentBlocking;
 import com.igalia.wolvic.browser.api.WResult;
@@ -57,7 +59,7 @@ public class RuntimeImpl implements WRuntime {
                 .screenSizeOverride(settings.getScreenWidthOverride(), settings.getScreenHeightOverride())
                 .inputAutoZoomEnabled(settings.isInputAutoZoomEnabled())
                 .doubleTapZoomingEnabled(settings.isDoubleTapZoomingEnabled())
-                .debugLogging(settings.isDoubleTapZoomingEnabled())
+                .debugLogging(settings.isConsoleServiceToLogcat())
                 .consoleOutput(settings.isConsoleOutputEnabled())
                 .loginAutofillEnabled(settings.isAutofillLoginsEnabled())
                 .configFilePath(settings.getConfigFilePath())
@@ -113,6 +115,17 @@ public class RuntimeImpl implements WRuntime {
     }
 
     @Override
+    public void setFragmentManager(@NonNull FragmentManager fragmentManager, @NonNull ViewGroup container) {
+        // No op. Gecko doesn't require views to render GeckoSessions. See GeckoDisplay.
+    }
+
+    @Override
+    public float getDensity() {
+        // GeckoDisplay uses 1.0 density and internally scales the devicePixelRatio to provided Surface.
+        return 1.0f;
+    }
+
+    @Override
     public void configurationChanged(@NonNull Configuration newConfig) {
         mRuntime.configurationChanged(newConfig);
     }
@@ -149,7 +162,7 @@ public class RuntimeImpl implements WRuntime {
     @NonNull
     @Override
     public CrashReportIntent getCrashReportIntent() {
-        return new CrashReportIntent(GeckoRuntime.ACTION_CRASHED, GeckoRuntime.EXTRA_MINIDUMP_PATH, GeckoRuntime.EXTRA_EXTRAS_PATH, GeckoRuntime.EXTRA_CRASH_FATAL);
+        return new CrashReportIntent(GeckoRuntime.ACTION_CRASHED, GeckoRuntime.EXTRA_MINIDUMP_PATH, GeckoRuntime.EXTRA_EXTRAS_PATH, GeckoRuntime.EXTRA_CRASH_PROCESS_TYPE);
     }
 
     static int toGeckoColorScheme(@WRuntimeSettings.ColorScheme int flags) {

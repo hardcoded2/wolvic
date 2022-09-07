@@ -27,7 +27,7 @@ import com.igalia.wolvic.R;
 import com.igalia.wolvic.browser.Media;
 import com.igalia.wolvic.browser.SessionChangeListener;
 import com.igalia.wolvic.browser.SettingsStore;
-import com.igalia.wolvic.browser.UserAgentOverride;
+import com.igalia.wolvic.browser.UriOverride;
 import com.igalia.wolvic.browser.VideoAvailabilityListener;
 import com.igalia.wolvic.browser.api.WAllowOrDeny;
 import com.igalia.wolvic.browser.api.WAutocomplete;
@@ -55,6 +55,7 @@ import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.Collections;
 import java.util.List;
+import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -66,7 +67,8 @@ public class Session implements WContentBlocking.Delegate, WSession.NavigationDe
         WSession.SelectionActionDelegate, SharedPreferences.OnSharedPreferenceChangeListener, SessionChangeListener {
 
     private static final String LOGTAG = SystemUtils.createLogtag(Session.class);
-    private static UserAgentOverride sUserAgentOverride;
+    private static UriOverride sUserAgentOverride;
+    private static UriOverride sDesktopModeOverrides;
     private static final long KEEP_ALIVE_DURATION_MS = 1000; // 1 second.
 
     private transient CopyOnWriteArrayList<WSession.NavigationDelegate> mNavigationListeners;
@@ -195,8 +197,12 @@ public class Session implements WContentBlocking.Delegate, WSession.NavigationDe
         mPrivatePage = InternalPages.createAboutPage(mContext, pageResources);
 
         if (sUserAgentOverride == null) {
-            sUserAgentOverride = new UserAgentOverride();
+            sUserAgentOverride = new UriOverride("user agent");
             sUserAgentOverride.loadOverridesFromAssets((Activity)mContext, mContext.getString(R.string.user_agent_override_file));
+        }
+        if (sDesktopModeOverrides == null) {
+            sDesktopModeOverrides = new UriOverride("desktop mode");
+            sDesktopModeOverrides.loadOverridesFromAssets((Activity)mContext, "desktopModeOverrides.json");
         }
     }
 
@@ -994,20 +1000,26 @@ public class Session implements WContentBlocking.Delegate, WSession.NavigationDe
         return result;
     }
 
-    public void setUaMode(int mode) {
+    private boolean trySetUaMode(int mode) {
         if (mState.mSession == null || mState.mSettings.getUserAgentMode() == mode) {
-            return;
+            return false;
         }
         mState.mSettings.setUserAgentMode(mode);
         mState.mSession.getSettings().setUserAgentMode(mode);
-        String overrideUri = null;
         if (mode == WSessionSettings.USER_AGENT_MODE_DESKTOP) {
             mState.mSettings.setViewportMode(WSessionSettings.VIEWPORT_MODE_DESKTOP);
-            overrideUri = checkForMobileSite(mState.mUri);
         } else {
             mState.mSettings.setViewportMode(WSessionSettings.VIEWPORT_MODE_MOBILE);
         }
         mState.mSession.getSettings().setViewportMode(mState.mSettings.getViewportMode());
+        return true;
+    }
+
+    public void setUaMode(int mode) {
+        if (!trySetUaMode(mode))
+            return;
+
+        String overrideUri = mode == WSessionSettings.USER_AGENT_MODE_DESKTOP ? checkForMobileSite(mState.mUri) : null;
         if (overrideUri != null) {
             mState.mSession.loadUri(overrideUri, WSession.LOAD_FLAGS_BYPASS_CACHE | WSession.LOAD_FLAGS_REPLACE_HISTORY);
         } else {
@@ -1061,6 +1073,15 @@ public class Session implements WContentBlocking.Delegate, WSession.NavigationDe
         // The homepage finishes loading after the region has been updated
         if (mState.mRegion != null && aUri.equalsIgnoreCase(SettingsStore.getInstance(mContext).getHomepage())) {
             aSession.loadUri("javascript:window.location.replace('" + getHomeUri() + "');");
+        } else if ((getUaMode() != WSessionSettings.USER_AGENT_MODE_DESKTOP) && !Objects.equals(mState.mPreviousUri, mState.mUri)) {
+            // The URL check above allows users to switch to mobile mode even for overriding sites.
+            if (sDesktopModeOverrides.lookupOverride(aUri) != null) {
+                trySetUaMode(WSessionSettings.USER_AGENT_MODE_DESKTOP);
+                String overrideUri = checkForMobileSite(aUri);
+                if (overrideUri == null)
+                    overrideUri = aUri;
+                aSession.loadUri(overrideUri);
+            }
         }
     }
 
@@ -1743,6 +1764,7 @@ public class Session implements WContentBlocking.Delegate, WSession.NavigationDe
         Log.d(LOGTAG, "\tActive: " + mState.isActive());
         Log.d(LOGTAG, "\tUri: " + (mState.mUri != null ? mState.mUri : "null"));
         Log.d(LOGTAG, "\tFullscreen: " + mState.mFullScreen);
+        Log.d(LOGTAG, "\tKiosk mode: " + mState.mInKioskMode);
         Log.d(LOGTAG, "\tCan go back: " + mState.mCanGoBack);
         Log.d(LOGTAG, "\tCan go forward: " + mState.mCanGoForward);
         if (mState.mSettings != null) {

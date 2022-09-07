@@ -51,6 +51,7 @@ import com.igalia.wolvic.browser.api.WMediaSession;
 import com.igalia.wolvic.browser.api.WResult;
 import com.igalia.wolvic.browser.api.WSession;
 import com.igalia.wolvic.browser.api.WWebResponse;
+import com.igalia.wolvic.browser.engine.EngineProvider;
 import com.igalia.wolvic.browser.engine.Session;
 import com.igalia.wolvic.browser.engine.SessionState;
 import com.igalia.wolvic.browser.engine.SessionStore;
@@ -140,13 +141,16 @@ public class WindowWidget extends UIWidget implements SessionChangeListener,
     private CopyOnWriteArrayList<Runnable> mSetViewQueuedCalls;
     private SharedPreferences mPrefs;
     private DownloadsManager mDownloadsManager;
+    private float mBrowserDensity;
 
     public interface WindowListener {
         default void onFocusRequest(@NonNull WindowWidget aWindow) {}
         default void onBorderChanged(@NonNull WindowWidget aWindow) {}
         default void onSessionChanged(@NonNull Session aOldSession, @NonNull Session aSession) {}
         default void onFullScreen(@NonNull WindowWidget aWindow, boolean aFullScreen) {}
+        default void onMediaFullScreen(@NonNull final WMediaSession mediaSession, boolean aFullScreen) {}
         default void onVideoAvailabilityChanged(@NonNull WindowWidget aWindow) {}
+        default void onKioskMode(WindowWidget aWindow, boolean isKioskMode) {}
     }
 
     @Override
@@ -240,7 +244,7 @@ public class WindowWidget extends UIWidget implements SessionChangeListener,
         aPlacement.height = SettingsStore.getInstance(getContext()).getWindowHeight() + mBorderWidth * 2;
         aPlacement.worldWidth = WidgetPlacement.floatDimension(getContext(), R.dimen.window_world_width) *
                 (float)windowWidth / (float)SettingsStore.WINDOW_WIDTH_DEFAULT;
-        aPlacement.density = 1.0f;
+        aPlacement.density = getBrowserDensity();
         aPlacement.visible = true;
         aPlacement.cylinder = true;
         aPlacement.textureScale = 1.0f;
@@ -391,6 +395,15 @@ public class WindowWidget extends UIWidget implements SessionChangeListener,
         }
     }
 
+    private void recreateWidgetSurfaceIfNeeded(float prevDensity) {
+        if (prevDensity != mWidgetPlacement.density || !isLayer())
+            return;
+
+        // If the densities are the same updateWidget won't generate a new surface as the resulting
+        // texture sizes are equal. We need to force a new surface creation when using layers.
+        mWidgetManager.recreateWidgetSurface(this);
+    }
+
     private void setView(View view, boolean switchSurface) {
         Runnable setView = () -> {
             if (switchSurface) {
@@ -403,6 +416,7 @@ public class WindowWidget extends UIWidget implements SessionChangeListener,
             addView(mView);
 
             if (switchSurface) {
+                float prevDensity = mWidgetPlacement.density;
                 mWidgetPlacement.density = getContext().getResources().getDisplayMetrics().density;
                 if (mTexture != null && mSurface != null && mRenderer == null) {
                     // Create the UI Renderer for the current surface.
@@ -415,6 +429,8 @@ public class WindowWidget extends UIWidget implements SessionChangeListener,
                 mWidgetManager.pushBackHandler(mBackHandler);
                 setWillNotDraw(false);
                 postInvalidate();
+
+                recreateWidgetSurfaceIfNeeded(prevDensity);
             }
         };
 
@@ -444,13 +460,15 @@ public class WindowWidget extends UIWidget implements SessionChangeListener,
                     }
                     mSurface = new Surface(mTexture);
                 }
-                mWidgetPlacement.density = 1.0f;
+                float prevDensity = mWidgetPlacement.density;
+                mWidgetPlacement.density = getBrowserDensity();
                 mWidgetManager.updateWidget(WindowWidget.this);
                 mWidgetManager.popWorldBrightness(WindowWidget.this);
                 mWidgetManager.popBackHandler(mBackHandler);
                 if (mTexture != null) {
                     resumeCompositor();
                 }
+                recreateWidgetSurfaceIfNeeded(prevDensity);
             }
         }
     }
@@ -915,6 +933,20 @@ public class WindowWidget extends UIWidget implements SessionChangeListener,
 
     public boolean isFullScreen() {
         return mViewModel.getIsFullscreen().getValue().get();
+    }
+
+    public void setKioskMode(boolean isKioskMode) {
+        if (mViewModel.getIsKioskMode().getValue().get() == isKioskMode)
+            return;
+
+        mViewModel.setIsKioskMode(isKioskMode);
+        for (WindowListener listener : mListeners) {
+            listener.onKioskMode(this, isKioskMode);
+        }
+    }
+
+    public boolean isKioskMode() {
+        return mViewModel.getIsKioskMode().getValue().get();
     }
 
     public void addWindowListener(WindowListener aListener) {
@@ -1552,49 +1584,22 @@ public class WindowWidget extends UIWidget implements SessionChangeListener,
     }
 
     public void startDownload(@NonNull DownloadJob downloadJob, boolean showConfirmDialog) {
-        Runnable download = () -> {
-            if (showConfirmDialog) {
-                mWidgetManager.getFocusedWindow().showConfirmPrompt(
-                        R.drawable.ic_icon_downloads,
-                        getResources().getString(R.string.download_confirm_title),
-                        downloadJob.getFilename(),
-                        new String[]{
-                                getResources().getString(R.string.download_confirm_cancel),
-                                getResources().getString(R.string.download_confirm_download)},
-                        (index, isChecked) ->  {
-                            if (index == PromptDialogWidget.POSITIVE) {
-                                mDownloadsManager.startDownload(downloadJob);
-                            }
+        if (showConfirmDialog) {
+            mWidgetManager.getFocusedWindow().showConfirmPrompt(
+                    R.drawable.ic_icon_downloads,
+                    getResources().getString(R.string.download_confirm_title),
+                    downloadJob.getFilename(),
+                    new String[]{
+                            getResources().getString(R.string.download_confirm_cancel),
+                            getResources().getString(R.string.download_confirm_download)},
+                    (index, isChecked) -> {
+                        if (index == PromptDialogWidget.POSITIVE) {
+                            mDownloadsManager.startDownload(downloadJob);
                         }
-                );
-
-            } else {
-                mDownloadsManager.startDownload(downloadJob);
-            }
-        };
-        @SettingsStore.Storage int storage = SettingsStore.getInstance(getContext()).getDownloadsStorage();
-        if (storage == SettingsStore.EXTERNAL) {
-            mWidgetManager.requestPermission(
-                    downloadJob.getUri(),
-                    android.Manifest.permission.WRITE_EXTERNAL_STORAGE,
-                    new WSession.PermissionDelegate.Callback() {
-                        @Override
-                        public void grant() {
-                            download.run();
-                        }
-
-                        @Override
-                        public void reject() {
-                            mWidgetManager.getFocusedWindow().showAlert(
-                                    getContext().getString(R.string.download_error_title_v1),
-                                    getContext().getString(R.string.download_error_external_storage),
-                                    null
-                            );
-                        }
-                    });
-
+                    }
+            );
         } else {
-            download.run();
+            mDownloadsManager.startDownload(downloadJob);
         }
     }
 
@@ -1739,6 +1744,8 @@ public class WindowWidget extends UIWidget implements SessionChangeListener,
             mViewModel.setIsMediaAvailable(false);
             mViewModel.setIsMediaPlaying(false);
         }
+        for (WindowListener listener: mListeners)
+            listener.onVideoAvailabilityChanged(this);
     }
 
    WMediaSession.Delegate mMediaDelegate = new WMediaSession.Delegate() {
@@ -1759,6 +1766,12 @@ public class WindowWidget extends UIWidget implements SessionChangeListener,
        public void onStop(@NonNull @NotNull WSession session, @NonNull @NotNull WMediaSession mediaSession) {
            mViewModel.setIsMediaAvailable(true);
            mViewModel.setIsMediaPlaying(false);
+       }
+
+       @Override
+       public void onFullscreen(@NonNull final WSession session, @NonNull final WMediaSession mediaSession, final boolean enabled, @Nullable final WMediaSession.ElementMetadata meta) {
+           for (WindowListener listener: mListeners)
+               listener.onMediaFullScreen(mediaSession, enabled);
        }
     };
 
@@ -1846,23 +1859,27 @@ public class WindowWidget extends UIWidget implements SessionChangeListener,
             hideLibraryPanel();
         }
 
-        if ("file".equalsIgnoreCase(uri.getScheme()) &&
-                !mWidgetManager.isPermissionGranted(android.Manifest.permission.READ_EXTERNAL_STORAGE)) {
-            mWidgetManager.requestPermission(
-                    aRequest.uri,
-                    android.Manifest.permission.READ_EXTERNAL_STORAGE,
-                    new WSession.PermissionDelegate.Callback() {
-                        @Override
-                        public void grant() {
-                            result.complete(WAllowOrDeny.ALLOW);
-                        }
+        if ("file".equalsIgnoreCase(uri.getScheme())) {
+            // Check that we have permission to open the file, otherwise try to request it.
+            File file = new File(uri.getPath());
+            if (file.exists() && !file.canRead() &&
+                    !mWidgetManager.isPermissionGranted(android.Manifest.permission.READ_EXTERNAL_STORAGE)) {
+                mWidgetManager.requestPermission(
+                        aRequest.uri,
+                        android.Manifest.permission.READ_EXTERNAL_STORAGE,
+                        new WSession.PermissionDelegate.Callback() {
+                            @Override
+                            public void grant() {
+                                result.complete(WAllowOrDeny.ALLOW);
+                            }
 
-                        @Override
-                        public void reject() {
-                            result.complete(WAllowOrDeny.DENY);
-                        }
-                    });
-            return result;
+                            @Override
+                            public void reject() {
+                                result.complete(WAllowOrDeny.DENY);
+                            }
+                        });
+                return result;
+            }
         }
 
         result.complete(WAllowOrDeny.ALLOW);
@@ -2139,5 +2156,12 @@ public class WindowWidget extends UIWidget implements SessionChangeListener,
 
             return true;
         }
+    }
+
+    private float getBrowserDensity() {
+        if (mBrowserDensity == 0) {
+            mBrowserDensity = EngineProvider.INSTANCE.getOrCreateRuntime(getContext()).getDensity();
+        }
+        return mBrowserDensity;
     }
 }

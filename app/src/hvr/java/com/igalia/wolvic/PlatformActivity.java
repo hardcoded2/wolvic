@@ -5,36 +5,43 @@
 
 package com.igalia.wolvic;
 
-import com.huawei.hms.mlsdk.common.MLApplication;
-import com.huawei.hvr.LibUpdateClient;
-
 import android.app.Activity;
-import android.app.AlertDialog;
 import android.app.Dialog;
+import android.content.BroadcastReceiver;
 import android.content.Context;
-import android.content.DialogInterface;
 import android.content.Intent;
+import android.content.IntentFilter;
+import android.content.SharedPreferences;
 import android.content.pm.ActivityInfo;
 import android.hardware.display.DisplayManager;
-import android.net.Uri;
 import android.os.Bundle;
+import android.preference.PreferenceManager;
 import android.util.Log;
 import android.view.KeyEvent;
 import android.view.Surface;
 import android.view.SurfaceHolder;
 import android.view.SurfaceView;
-import android.view.View;
 import android.view.Window;
 import android.view.WindowManager;
 
+import com.huawei.hms.mlsdk.common.MLApplication;
+import com.huawei.hms.push.RemoteMessage;
+import com.huawei.hvr.LibUpdateClient;
 import com.igalia.wolvic.browser.PermissionDelegate;
 import com.igalia.wolvic.browser.SettingsStore;
-import com.igalia.wolvic.browser.engine.Session;
-import com.igalia.wolvic.generated.callback.OnClickListener;
+import com.igalia.wolvic.speech.SpeechRecognizer;
+import com.igalia.wolvic.speech.SpeechServices;
 import com.igalia.wolvic.telemetry.TelemetryService;
+import com.igalia.wolvic.ui.adapters.SystemNotification;
+import com.igalia.wolvic.ui.widgets.SystemNotificationsManager;
+import com.igalia.wolvic.ui.widgets.UIWidget;
+import com.igalia.wolvic.ui.widgets.WidgetManagerDelegate;
 import com.igalia.wolvic.utils.StringUtils;
 
-import org.mozilla.geckoview.GeckoSession;
+import org.json.JSONException;
+import org.json.JSONObject;
+
+import java.util.Calendar;
 
 public class PlatformActivity extends Activity implements SurfaceHolder.Callback {
     public static final String TAG = "PlatformActivity";
@@ -42,6 +49,8 @@ public class PlatformActivity extends Activity implements SurfaceHolder.Callback
     private Context mContext = null;
     private HVRLocationManager mLocationManager;
     private Dialog mActiveDialog;
+    private SharedPreferences mPrefs;
+    private BroadcastReceiver mHmsMessageBroadcastReceiver;
 
     static {
         Log.i(TAG, "LoadLibrary");
@@ -55,6 +64,20 @@ public class PlatformActivity extends Activity implements SurfaceHolder.Callback
         return true;
     }
 
+    private final SharedPreferences.OnSharedPreferenceChangeListener mOnSharedPreferenceChangeListener =
+            (sharedPreferences, key) -> {
+                if (key.equals(getString(R.string.settings_key_privacy_policy_accepted))) {
+                    if (SettingsStore.getInstance(PlatformActivity.this).isPrivacyPolicyAccepted()) {
+                        Log.d(TAG, "PushKit: privacy policy is accepted, calling getHmsMessageServiceToken");
+                        setHmsMessageServiceAutoInit(true);
+                        getHmsMessageServiceToken();
+                    } else {
+                        Log.d(TAG, "PushKit: privacy policy is denied, calling deleteHmsMessageServiceToken");
+                        setHmsMessageServiceAutoInit(false);
+                        deleteHmsMessageServiceToken();
+                    }
+                }
+            };
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -62,76 +85,136 @@ public class PlatformActivity extends Activity implements SurfaceHolder.Callback
         super.onCreate(savedInstanceState);
         mContext = this;
         mLocationManager = new HVRLocationManager(this);
-        PermissionDelegate.sPlatformLocationOverride = new PermissionDelegate.PlatformLocationOverride() {
+        PermissionDelegate.sPlatformLocationOverride = session -> mLocationManager.start(session);
+
+        mHmsMessageBroadcastReceiver = new BroadcastReceiver() {
             @Override
-            public void onLocationGranted(Session session) {
-                mLocationManager.start(session);
+            public void onReceive(Context context, Intent intent) {
+                Log.d(TAG, "PushKit: mHmsMessageBroadcastReceiver " + intent);
+                handlemHmsMessageBroadcast(intent);
             }
         };
+        IntentFilter filter = new IntentFilter();
+        filter.addAction(WolvicHmsMessageService.MESSAGE_RECEIVED_ACTION);
+        registerReceiver(mHmsMessageBroadcastReceiver, filter);
 
-        requestWindowFeature(Window.FEATURE_NO_TITLE);
-        getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN, WindowManager.LayoutParams.FLAG_FULLSCREEN);
+        // We need to wait until the Privacy Policy is accepted before requesting a message token.
+        if (SettingsStore.getInstance(this).isPrivacyPolicyAccepted()) {
+            Log.d(TAG, "PushKit: privacy policy is accepted, calling getHmsMessageServiceToken");
+            setHmsMessageServiceAutoInit(true);
+            getHmsMessageServiceToken();
+        }
+        mPrefs = PreferenceManager.getDefaultSharedPreferences(this);
+        mPrefs.registerOnSharedPreferenceChangeListener(mOnSharedPreferenceChangeListener);
 
         DisplayManager manager = (DisplayManager) getSystemService(Context.DISPLAY_SERVICE);
         if (manager.getDisplays().length < 2) {
-            setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
-            setContentView(R.layout.hvr_connect_glasses);
-            manager.registerDisplayListener(new DisplayManager.DisplayListener() {
-                @Override
-                public void onDisplayAdded(int displayId) {
-                    initializeVR();
-                }
-
-                @Override
-                public void onDisplayRemoved(int displayId) {
-                }
-
-                @Override
-                public void onDisplayChanged(int displayId) {
-                }
-            }, null);
-
-            if (!SettingsStore.getInstance(PlatformActivity.this).isPrivacyPolicyAccepted()) {
-                showPrivacyDialog();
-            }
-
+            showPhoneUI();
         } else {
+            requestWindowFeature(Window.FEATURE_NO_TITLE);
+            getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN, WindowManager.LayoutParams.FLAG_FULLSCREEN);
             initializeVR();
         }
     }
 
-    private void showPrivacyDialog() {
-        Dialog dialog = new Dialog(this);
-        dialog.setContentView(R.layout.hvr_privacy_dialog);
-        dialog.getWindow().setBackgroundDrawableResource(android.R.color.transparent);
-        dialog.setCancelable(false);
+    private void handlemHmsMessageBroadcast(Intent intent) {
+        if (!WolvicHmsMessageService.MESSAGE_RECEIVED_ACTION.equals(intent.getAction()))
+            return;
 
-        dialog.findViewById(R.id.privacyOpenButton).setOnClickListener(v -> {
-            String url = getString(R.string.private_policy_url);
-            Intent i = new Intent(Intent.ACTION_VIEW);
-            i.setData(Uri.parse(url));
-            startActivity(i);
-        });
+        RemoteMessage message = intent.getParcelableExtra(WolvicHmsMessageService.MESSAGE_EXTRA);
+        Log.i(TAG, "PushKit: received remote message " + message);
 
-        dialog.findViewById(R.id.termsOpenButton).setOnClickListener(v -> {
-            String url = getString(R.string.terms_service_url);
-            Intent i = new Intent(Intent.ACTION_VIEW);
-            i.setData(Uri.parse(url));
-            startActivity(i);
-        });
+        String title = null;
+        String body = null;
+        SystemNotification.Action action = null;
 
-        dialog.findViewById(R.id.privacyCancelButton).setOnClickListener(v -> {
-            finish();
-        });
+        if (message.getNotification() != null && message.getNotification().getTitle() != null) {
+            Log.d(TAG, "PushKit: message has a Notification object");
+            // the message was already parsed into a notification object
+            RemoteMessage.Notification remoteNotification = message.getNotification();
+            title = remoteNotification.getTitle();
+            body = remoteNotification.getBody();
 
-        dialog.findViewById(R.id.privacyAcceptButton).setOnClickListener(v -> {
-            SettingsStore.getInstance(PlatformActivity.this).setPrivacyPolicyAccepted(true);
-            dialog.dismiss();
-            mActiveDialog = null;
-        });
+            if (remoteNotification.getClickAction() != null) {
+                try {
+                    JSONObject actionJson = new JSONObject(remoteNotification.getClickAction());
+                    action = new SystemNotification.Action(actionJson.optInt("type"),
+                            actionJson.optString("intent"),
+                            actionJson.optString("url"),
+                            actionJson.optString("action"));
+                } catch (JSONException e) {
+                    e.printStackTrace();
+                }
+            }
+        } else {
+            // the message data contains a JSON description
+            String dataString = message.getData();
 
-        dialog.show();
-        mActiveDialog = dialog;
+            Log.d(TAG, "PushKit: message has data: " + message.getData());
+
+            try {
+                JSONObject dataJson = new JSONObject(dataString);
+                JSONObject messageJson = dataJson.getJSONObject("message");
+
+                JSONObject notificationJson = messageJson.optJSONObject("notification");
+                if (notificationJson != null) {
+                    title = notificationJson.getString("title");
+                    body = notificationJson.getString("body");
+                }
+
+                JSONObject androidJson = messageJson.optJSONObject("android");
+                if (androidJson != null) {
+                    JSONObject androidNotificationJson = androidJson.optJSONObject("notification");
+                    if (androidNotificationJson != null) {
+                        String androidTitle = androidNotificationJson.optString("title");
+                        title = androidTitle.isEmpty() ? title : androidTitle;
+                        String androidBody = androidNotificationJson.optString("body");
+                        body = androidBody.isEmpty() ? body : androidBody;
+                        JSONObject actionJson = androidNotificationJson.getJSONObject("click_action");
+                        action = new SystemNotification.Action(actionJson.optInt("type"),
+                                actionJson.optString("intent"),
+                                actionJson.optString("url"),
+                                actionJson.optString("action"));
+                    }
+                }
+            } catch (JSONException e) {
+                Log.e(TAG, "PushKit: error parsing JSON: " + e);
+                e.printStackTrace();
+            }
+        }
+
+        Log.d(TAG, "PushKit: title= " + title + " , body= " + body + " , action= " + action);
+
+        if (title != null) {
+            SystemNotification systemNotification = new SystemNotification(title, body, action, Calendar.getInstance());
+            Log.i(TAG, "PushKit: created SystemNotification: " + systemNotification);
+            // FIXME here and in a few other places we cast the current Context to WidgetManagerDelegate
+            UIWidget parentWidget = ((WidgetManagerDelegate) this).getTray();
+            SystemNotificationsManager.getInstance().addNewSystemNotification(systemNotification, parentWidget);
+        }
+    }
+
+    private void showPhoneUI() {
+        DisplayManager manager = (DisplayManager) getSystemService(Context.DISPLAY_SERVICE);
+        manager.registerDisplayListener(new DisplayManager.DisplayListener() {
+            @Override
+            public void onDisplayAdded(int displayId) {
+                // create the activity again, so the theme is set up properly
+                recreate();
+            }
+
+            @Override
+            public void onDisplayRemoved(int displayId) {
+            }
+
+            @Override
+            public void onDisplayChanged(int displayId) {
+            }
+        }, null);
+
+        setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
+        setTheme(R.style.Theme_WolvicPhone);
+        setContentView(R.layout.activity_main);
     }
 
     private void initializeVR() {
@@ -139,6 +222,7 @@ public class PlatformActivity extends Activity implements SurfaceHolder.Callback
             mActiveDialog.dismiss();
         }
         setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE);
+        setTheme(R.style.FxR_Dark);
         mView = new SurfaceView(this);
         setContentView(mView);
 
@@ -151,20 +235,61 @@ public class PlatformActivity extends Activity implements SurfaceHolder.Callback
 
     private void initializeAGConnect() {
         try {
-            if (StringUtils.isEmpty(BuildConfig.HVR_ML_API_KEY)) {
+            String speechService = SettingsStore.getInstance(this).getVoiceSearchService();
+            if (SpeechServices.HUAWEI_ASR.equals(speechService) && StringUtils.isEmpty(BuildConfig.HVR_ML_API_KEY)) {
+                Log.e(TAG, "HVR API key is not available");
                 return;
             }
             MLApplication.getInstance().setApiKey(BuildConfig.HVR_ML_API_KEY);
             TelemetryService.setService(new HVRTelemetry(this));
-            ((VRBrowserApplication)getApplicationContext()).setSpeechRecognizer(new HVRSpeechRecognizer(this));
+            try {
+                SpeechRecognizer speechRecognizer = SpeechServices.getInstance(this, speechService);
+                ((VRBrowserApplication) getApplicationContext()).setSpeechRecognizer(speechRecognizer);
+            } catch (ReflectiveOperationException e) {
+                e.printStackTrace();
+            }
         } catch (Exception e) {
             e.printStackTrace();
         }
     }
 
+    private void setHmsMessageServiceAutoInit(boolean enabled) {
+        Log.d(TAG, "PushKit: setHmsMessageServiceAutoInit");
+        Intent intent = new Intent(this, WolvicHmsMessageService.class);
+        intent.putExtra(WolvicHmsMessageService.COMMAND, WolvicHmsMessageService.COMMAND_AUTO_INIT);
+        intent.putExtra(WolvicHmsMessageService.ENABLED_EXTRA, enabled);
+        startService(intent);
+    }
+
+    private void getHmsMessageServiceToken() {
+        Log.d(TAG, "PushKit: getHmsMessageServiceToken");
+        Intent intent = new Intent(this, WolvicHmsMessageService.class);
+        intent.putExtra(WolvicHmsMessageService.COMMAND, WolvicHmsMessageService.COMMAND_GET_TOKEN);
+        startService(intent);
+    }
+
+    private void deleteHmsMessageServiceToken() {
+        Log.d(TAG, "PushKit: deleteHmsMessageServiceToken");
+        Intent intent = new Intent(this, WolvicHmsMessageService.class);
+        intent.putExtra(WolvicHmsMessageService.COMMAND, WolvicHmsMessageService.COMMAND_DELETE_TOKEN);
+        startService(intent);
+    }
+
+    private void stopHmsMessageService() {
+        Log.d(TAG, "PushKit: stopHmsMessageService");
+        Intent intent = new Intent(this, WolvicHmsMessageService.class);
+        intent.putExtra(WolvicHmsMessageService.COMMAND, WolvicHmsMessageService.COMMAND_STOP_SERVICE);
+        startService(intent);
+    }
+
     @Override
     protected void onDestroy() {
         Log.i(TAG, "PlatformActivity onDestroy");
+
+        stopHmsMessageService();
+        unregisterReceiver(mHmsMessageBroadcastReceiver);
+        mPrefs.unregisterOnSharedPreferenceChangeListener(mOnSharedPreferenceChangeListener);
+
         super.onDestroy();
         nativeOnDestroy();
     }
