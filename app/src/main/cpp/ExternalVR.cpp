@@ -227,9 +227,6 @@ mozilla::gfx::VRControllerType GetVRControllerTypeByDevice(device::DeviceType aT
     case device::ViveFocusPlus:
       result = mozilla::gfx::VRControllerType::HTCViveFocusPlus;
       break;
-//    case device::ViveFlow:
-//      result = mozilla::gfx::VRControllerType::HTCViveFlow;
-//      break;
     case device::PicoGaze:
       result = mozilla::gfx::VRControllerType::PicoGaze;
       break;
