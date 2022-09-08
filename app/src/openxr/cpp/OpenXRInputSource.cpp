@@ -586,11 +586,7 @@ void OpenXRInputSource::Update(const XrFrameState& frameState, XrSpace localSpac
         }
       } else if (axis.type == OpenXRAxisType::Thumbstick) {
         axesContainer[device::kImmersiveAxisThumbstickX] = state->x;
-#ifdef HVR_6DOF
-        axesContainer[device::kImmersiveAxisThumbstickY] = state->y;
-#else
         axesContainer[device::kImmersiveAxisThumbstickY] = -state->y;
-#endif
         delegate.SetScrolledDelta(mIndex, state->x, state->y);
       } else {
         axesContainer.push_back(state->x);
