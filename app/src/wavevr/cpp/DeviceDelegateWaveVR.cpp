@@ -201,7 +201,8 @@ struct DeviceDelegateWaveVR::State {
 
       if (immersiveDisplay) {
         vrb::Vector translation = eyeOffset.GetTranslation();
-        immersiveDisplay->SetEyeOffset(deviceEye, translation.x(), translation.y(), translation.z());
+        immersiveDisplay->SetEyeTransform(deviceEye, eyeOffset);
+        //immersiveDisplay->SetEyeOffset(deviceEye, translation.x(), translation.y(), translation.z());
         const float toDegrees = 180.0f / (float)M_PI;
         immersiveDisplay->SetFieldOfView(deviceEye, fovLeft * toDegrees, fovRight * toDegrees, fovTop * toDegrees, fovBottom * toDegrees);
       }
