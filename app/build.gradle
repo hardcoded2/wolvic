@@ -34,7 +34,7 @@ def getDevApplicationIdSuffix = { ->
     return ""
 }
 
-def getUseDebugSigningOnRelease = {
+def getUseDebugSigningOnRelease = { ->
     if (gradle.hasProperty("userProperties.useDebugSigningOnRelease")) {
         return gradle."userProperties.useDebugSigningOnRelease" == "true"
     }
@@ -175,10 +175,6 @@ android {
 
     lintOptions {
         disable "ExtraTranslation"
-        checkReleaseBuilds false
-        // Or, if you prefer, you can continue to check for errors in release builds,
-        // but continue the build even when errors are found:
-        abortOnError false
     }
 
     flavorDimensions "platform", "abi", "country"
