@@ -425,7 +425,7 @@ android {
             res.srcDirs = [
                     'src/wavevr/res'
             ]
-            jniLibs.srcDirs = ["${project.rootDir}/third_party/wavesdk/build/wvr_client-${versions.wavevr}/jni"]
+            //jniLibs.srcDirs = ["${project.rootDir}/third_party/wavesdk/build/wvr_client-${versions.wavevr}/jni"]
         }
 
         wavevrStore {
