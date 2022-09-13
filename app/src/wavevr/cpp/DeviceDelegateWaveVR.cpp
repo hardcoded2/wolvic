@@ -150,10 +150,17 @@ struct DeviceDelegateWaveVR::State {
         sixDoFControllerCount++;
       }
     }
+    const bool magicDetectDeviceIfItsFlow =  true; //TODO: actually detect if is flow
+
     if (sixDoFControllerCount) {
       deviceType = device::ViveFocusPlus;
     } else {
-      deviceType = device::ViveFocus;
+      if(magicDetectDeviceIfItsFlow){
+        //deviceType = device::ViveFlow;
+          deviceType = device::ViveFocus;
+      }else{
+        deviceType = device::ViveFocus;
+      }
     }
     reorientMatrix = vrb::Matrix::Identity();
   }
@@ -194,7 +201,8 @@ struct DeviceDelegateWaveVR::State {
 
       if (immersiveDisplay) {
         vrb::Vector translation = eyeOffset.GetTranslation();
-        immersiveDisplay->SetEyeOffset(deviceEye, translation.x(), translation.y(), translation.z());
+        immersiveDisplay->SetEyeTransform(deviceEye, eyeOffset);
+        //immersiveDisplay->SetEyeOffset(deviceEye, translation.x(), translation.y(), translation.z());
         const float toDegrees = 180.0f / (float)M_PI;
         immersiveDisplay->SetFieldOfView(deviceEye, fovLeft * toDegrees, fovRight * toDegrees, fovTop * toDegrees, fovBottom * toDegrees);
       }
@@ -299,8 +307,11 @@ struct DeviceDelegateWaveVR::State {
             beamTransform);
     delegate->SetLeftHanded(aController.index, aController.hand == ElbowModel::HandEnum::Left);
     delegate->SetHapticCount(aController.index, 1);
-    delegate->SetControllerType(aController.index, aController.is6DoF ? device::ViveFocusPlus :
-                                device::ViveFocus);
+    auto controllerType = aController.is6DoF ? device::ViveFocusPlus : device::ViveFocus;
+    /*if(this->deviceType == device::ViveFlow){
+      controllerType = device::ViveFlow;
+    }*/
+    delegate->SetControllerType(aController.index, controllerType);
     delegate->SetTargetRayMode(aController.index, device::TargetRayMode::TrackedPointer);
 
     if (aController.is6DoF) {
@@ -367,8 +378,10 @@ struct DeviceDelegateWaveVR::State {
       uint32_t ctl_touch = WVR_GetInputDeviceCapability(controller.type, WVR_InputType_Touch);
       uint32_t ctl_analog = WVR_GetInputDeviceCapability(controller.type, WVR_InputType_Analog);
 
-      const bool bumperPressed = (controller.is6DoF) ? WVR_GetInputButtonState(controller.type, WVR_InputId_Alias1_Trigger)
-                                  : WVR_GetInputButtonState(controller.type, WVR_InputId_Alias1_Bumper);
+        //const bool bumperPressed = (controller.is6DoF) ? WVR_GetInputButtonState(controller.type, WVR_InputId_Alias1_Trigger) : WVR_GetInputButtonState(controller.type, WVR_InputId_Alias1_Bumper);
+        //suggestion from wenhsiang_tu through email 10/7/2021
+        const bool bumperPressed = WVR_GetInputButtonState(controller.type, WVR_InputId_Alias1_Trigger);
+
 
       // ABXY buttons
       if (ctl_button & WVR_InputId_Alias1_A) {
@@ -390,8 +403,8 @@ struct DeviceDelegateWaveVR::State {
         }
       }
 
-      const bool touchpadPressed = WVR_GetInputButtonState(controller.type, WVR_InputId_Alias1_Touchpad);
-      const bool touchpadTouched = WVR_GetInputTouchState(controller.type, WVR_InputId_Alias1_Touchpad);
+      const bool touchpadPressed = renderMode == device::RenderMode::Immersive;//WVR_GetInputButtonState(controller.type, WVR_InputId_Alias1_Touchpad);
+      const bool touchpadTouched = renderMode == device::RenderMode::Immersive;//WVR_GetInputTouchState(controller.type, WVR_InputId_Alias1_Touchpad);
       const bool menuPressed = WVR_GetInputButtonState(controller.type, WVR_InputId_Alias1_Menu);
 
       // Although Focus only has two buttons, in order to match WebXR input profile (squeeze placeholder),
@@ -709,12 +722,12 @@ DeviceDelegateWaveVR::ProcessEvents() {
         m.isRunning = false;
         return;
       }
-      case WVR_EventType_SystemInteractionModeChanged: {
-        VRB_WAVE_EVENT_LOG("WVR_EventType_SystemInteractionModeChanged");
+      case WVR_EventType_InteractionModeChanged: {
+        VRB_WAVE_EVENT_LOG("WVR_EventType_InteractionModeChanged");
       }
         break;
-      case WVR_EventType_SystemGazeTriggerTypeChanged: {
-        VRB_WAVE_EVENT_LOG("WVR_EventType_SystemGazeTriggerTypeChanged");
+      case WVR_EventType_GazeTriggerTypeChanged: {
+        VRB_WAVE_EVENT_LOG("WVR_EventType_GazeTriggerTypeChanged");
       }
         break;
       case WVR_EventType_TrackingModeChanged: {
@@ -1006,10 +1019,18 @@ vrb::LoadTask DeviceDelegateWaveVR::GetControllerModelTask(int32_t aModelIndex) 
   return [this, aModelIndex](vrb::CreationContextPtr& aContext) -> vrb::GroupPtr {
       vrb::GroupPtr root = vrb::Group::Create(aContext);
       auto hand = static_cast<ElbowModel::HandEnum>(aModelIndex);
+      if(this->GetDeviceType() == device::ViveFocus){
+        hand = aModelIndex == 0 ? ElbowModel::HandEnum::Right : ElbowModel::HandEnum::Left; // the index is the opposite of the way these are created, where index0 is right and index1 is left in the constructor
+      }
 
       // Load controller model from SDK
       VRB_LOG("[WaveVR] (%p) Loading internal controller model: %d", this, aModelIndex);
+
       WVR_DeviceType mCtrlerType = hand == ElbowModel::HandEnum::Left ? WVR_DeviceType_Controller_Left : WVR_DeviceType_Controller_Right;
+      if(this->GetDeviceType() == device::ViveFocus){ //FIXME: should be device::ViveFlow
+      //if(true){
+          mCtrlerType = WVR_DeviceType_Controller_Right;
+      }
       {//Critical Section: Clear flag and cached parsed data.
         std::lock_guard<std::mutex> lockGuard(m.mCachedDataMutex[aModelIndex]);
         if (m.modelCachedData[aModelIndex] != nullptr) {
