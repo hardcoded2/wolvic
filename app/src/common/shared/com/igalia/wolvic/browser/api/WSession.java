@@ -1958,7 +1958,6 @@ public interface WSession {
          *
          * @param session ISession instance requesting the permissions.
          * @param permissions List of permissions to request; possible values are,
-         *     android.Manifest.permission.ACCESS_COARSE_LOCATION
          *     android.Manifest.permission.ACCESS_FINE_LOCATION android.Manifest.permission.CAMERA
          *     android.Manifest.permission.RECORD_AUDIO
          * @param callback Callback interface.
