@@ -628,12 +628,15 @@ DeviceDelegateWaveVR::RegisterImmersiveDisplay(ImmersiveDisplayPtr aDisplay) {
     flags |= device::PositionEmulated;
   }
   VRB_LOG("ASINK:  RegisterImmersiveDisplay 2 ");
+  //TODO: add some logging
+
   m.immersiveDisplay->SetCapabilityFlags(flags);
   m.immersiveDisplay->SetEyeResolution(m.renderWidth, m.renderHeight);
   m.UpdateStandingMatrix();
   m.UpdateBoundary();
   m.InitializeCameras();
   m.immersiveDisplay->CompleteEnumeration();
+  VRB_LOG("ASINK:  RegisterImmersiveDisplay 3");
 }
 
 void
