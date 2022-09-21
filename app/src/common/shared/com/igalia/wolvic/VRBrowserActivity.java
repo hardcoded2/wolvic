@@ -613,11 +613,6 @@ public class VRBrowserActivity extends PlatformActivity implements WidgetManager
         super.onConfigurationChanged(newConfig);
     }
 
-    @Override
-    public void onLowMemory() {
-        //TODO: asink: figure out the right method to call
-    }
-
     void loadFromIntent(final Intent intent) {
         if (getCrashReportIntent().action_crashed.equals(intent.getAction())) {
             Log.e(LOGTAG,"Loading from crash Intent");
