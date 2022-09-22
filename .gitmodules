@@ -1,3 +1,6 @@
 [submodule "app/src/main/cpp/vrb"]
 	path = app/src/main/cpp/vrb
 	url = https://github.com/igalia/vrb.git
+[submodule "third_party"]
+	path = third_party
+	url = ../wolvic_thirdparty_wave_only.git
