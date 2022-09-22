@@ -881,6 +881,10 @@ DeviceDelegateWaveVR::StartFrame(const FramePrediction aPrediction) {
     m.leftFBOIndex = WVR_GetAvailableTextureIndex(m.leftTextureQueue);
     m.rightFBOIndex = WVR_GetAvailableTextureIndex(m.rightTextureQueue);
   }
+
+    if(m.immersiveDisplay){
+        VRB_LOG("ASINK: start frame with immersive display");
+    }
   // Update cameras
   WVR_GetSyncPose(WVR_PoseOriginModel_OriginOnHead, m.devicePairs, WVR_DEVICE_COUNT_LEVEL_1);
   vrb::Matrix hmd = vrb::Matrix::Identity();
@@ -892,14 +896,32 @@ DeviceDelegateWaveVR::StartFrame(const FramePrediction aPrediction) {
       }
       hmd.TranslateInPlace(kAverageHeight);
     }
+
     if(true){
         //old code path
         m.cameras[device::EyeIndex(device::Eye::Left)]->SetHeadTransform(hmd);
         m.cameras[device::EyeIndex(device::Eye::Right)]->SetHeadTransform(hmd);
     }else{
-        //new test code path
-        m.cameras[device::EyeIndex(device::Eye::Left)]->SetEyeTransform(hmd);
+        //speculative test code path
+        m.cameras[device::EyeIndex(device::Eye::Left)]->SetEyeTransform(hmd); //FIXME: get ipd from api
         m.cameras[device::EyeIndex(device::Eye::Right)]->SetEyeTransform(hmd);
+
+        m.cameras[device::EyeIndex(device::Eye::Left)]->SetHeadTransform(hmd);
+        m.cameras[device::EyeIndex(device::Eye::Right)]->SetHeadTransform(hmd);
+        if(m.immersiveDisplay)
+            for (WVR_Eye eye : {WVR_Eye_Left, WVR_Eye_Right}) {
+                const device::Eye deviceEye =
+                        eye == WVR_Eye_Left ? device::Eye::Left : device::Eye::Right;
+                vrb::Matrix eyeOffset = vrb::Matrix::FromRowMajor(
+                        WVR_GetTransformFromEyeToHead(eye, WVR_NumDoF_6DoF).m);
+                vrb::Vector translation = eyeOffset.GetTranslation();
+                //cameras[device::EyeIndex(deviceEye)]->SetEyeTransform(eyeOffset)
+
+                //immersiveDisplay->SetEyeOffset(deviceEye, translation.x(), translation.y(),translation.z());
+                immersiveDisplay->SetEyeTransform(translation);
+            }
+        }
+        //set capabilities again every frame maybe?
     }
   }
 
