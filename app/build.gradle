@@ -147,7 +147,7 @@ android {
     }
 
     lintOptions {
-        disable "ExtraTranslation"
+        disable "ExtraTranslation","Instantiatable"
     }
 
     flavorDimensions "platform", "abi", "country"
