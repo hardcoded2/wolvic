@@ -202,9 +202,10 @@ struct DeviceDelegateWaveVR::State {
       cameras[device::EyeIndex(deviceEye)]->SetPerspective(projection);
 
       if (immersiveDisplay) {
+          VRB_LOG("ASINK: initializecameras immersive display");
         vrb::Vector translation = eyeOffset.GetTranslation();
         immersiveDisplay->SetEyeTransform(deviceEye, eyeOffset);
-        //immersiveDisplay->SetEyeOffset(deviceEye, translation.x(), translation.y(), translation.z());
+        immersiveDisplay->SetEyeOffset(deviceEye, translation.x(), translation.y(), translation.z());
         const float toDegrees = 180.0f / (float)M_PI;
         immersiveDisplay->SetFieldOfView(deviceEye, fovLeft * toDegrees, fovRight * toDegrees, fovTop * toDegrees, fovBottom * toDegrees);
       }
@@ -634,9 +635,9 @@ DeviceDelegateWaveVR::RegisterImmersiveDisplay(ImmersiveDisplayPtr aDisplay) {
   m.immersiveDisplay->SetEyeResolution(m.renderWidth, m.renderHeight);
   m.UpdateStandingMatrix();
   m.UpdateBoundary();
+  VRB_LOG("ASINK: registerimmersivedispaly about to aclal initialize cameras");
   m.InitializeCameras();
   m.immersiveDisplay->CompleteEnumeration();
-  VRB_LOG("ASINK:  RegisterImmersiveDisplay 3");
 }
 
 void
@@ -691,6 +692,7 @@ void
 DeviceDelegateWaveVR::SetClipPlanes(const float aNear, const float aFar) {
   m.near = aNear;
   m.far = aFar;
+    VRB_LOG("ASINK: Creating SetClipPlanes about to initialize cameras");
   m.InitializeCameras();
 }
 
@@ -761,6 +763,7 @@ DeviceDelegateWaveVR::ProcessEvents() {
         break;
       case WVR_EventType_IpdChanged: {
         VRB_WAVE_EVENT_LOG("WVR_EventType_IpdChanged");
+          VRB_LOG("ASINK: WVR_EventType_IpdChanged IPDChanged");
         m.InitializeCameras();
       }
         break;
