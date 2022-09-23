@@ -104,7 +104,7 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
 
-public class VRBrowserActivity extends PlatformActivity implements WidgetManagerDelegate,
+public class VRBrowserActivity extends com.igalia.wolvic.PlatformActivity implements WidgetManagerDelegate,
         ComponentCallbacks2, LifecycleOwner, ViewModelStoreOwner, SharedPreferences.OnSharedPreferenceChangeListener {
 
     private BroadcastReceiver mCrashReceiver = new BroadcastReceiver() {
@@ -643,6 +643,12 @@ public class VRBrowserActivity extends PlatformActivity implements WidgetManager
         SendTabDialogWidget.getInstance(this).onConfigurationChanged(newConfig);
 
         super.onConfigurationChanged(newConfig);
+    }
+
+    //asink: implement onLowMemory
+    @Override
+    public void onLowMemory() {
+
     }
 
     @Override
