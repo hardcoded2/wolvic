@@ -124,6 +124,9 @@ android {
                 arguments "-DANDROID_STL=c++_shared"
             }
         }
+        packagingOptions {
+            jniLibs.useLegacyPackaging = true
+        }
         javaCompileOptions {
             annotationProcessorOptions {
                 arguments = [
