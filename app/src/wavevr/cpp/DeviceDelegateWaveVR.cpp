@@ -183,7 +183,6 @@ struct DeviceDelegateWaveVR::State {
 
   void InitializeCameras()
   {
-    VRB_LOG("ASINK: InitializeCameras");
     for (WVR_Eye eye : {WVR_Eye_Left, WVR_Eye_Right}) {
       const device::Eye deviceEye = eye == WVR_Eye_Left ? device::Eye::Left : device::Eye::Right;
       vrb::Matrix eyeOffset = vrb::Matrix::FromRowMajor(WVR_GetTransformFromEyeToHead(eye, WVR_NumDoF_6DoF).m);
@@ -212,9 +211,7 @@ struct DeviceDelegateWaveVR::State {
 
   void Initialize() {
     vrb::RenderContextPtr localContext = context.lock();
-    VRB_LOG("ASINK: Initialize");
     if (!localContext) {
-      VRB_LOG("ASINK: Initialize no local context");
       return;
     }
     vrb::CreationContextPtr create = localContext->GetRenderThreadCreationContext();
@@ -236,30 +233,26 @@ struct DeviceDelegateWaveVR::State {
     WVR_SetInputRequest(WVR_DeviceType_HMD, inputIdAndTypes, sizeof(inputIdAndTypes) / sizeof(*inputIdAndTypes));
     WVR_SetInputRequest(WVR_DeviceType_Controller_Right, inputIdAndTypes, sizeof(inputIdAndTypes) / sizeof(*inputIdAndTypes));
     WVR_SetInputRequest(WVR_DeviceType_Controller_Left, inputIdAndTypes, sizeof(inputIdAndTypes) / sizeof(*inputIdAndTypes));
-    VRB_LOG("ASINK: Initialize 2");
     elbow = ElbowModel::Create();
   }
 
   void InitializeRender() {
     WVR_GetRenderTargetSize(&renderWidth, &renderHeight);
     VRB_GL_CHECK(glViewport(0, 0, renderWidth, renderHeight));
-    VRB_DEBUG("ASINK: Recommended size is %ux%u", renderWidth, renderHeight);
+    VRB_DEBUG("Recommended size is %ux%u", renderWidth, renderHeight);
     if (renderWidth == 0 || renderHeight == 0) {
-      VRB_ERROR("ASINK: Please check Wave server configuration");
+      VRB_ERROR("Please check Wave server configuration");
       return;
     }
     if (immersiveDisplay) {
-      VRB_LOG("ASINK: InitializeRenderer immersiveDisplay");
       immersiveDisplay->SetEyeResolution(renderWidth, renderHeight);
-    }else{
-      VRB_LOG("ASINK: InitializeRenderer non-immersiveDisplay");
     }
     InitializeTextureQueues();
   }
 
   void InitializeTextureQueues() {
     ReleaseTextureQueues();
-    VRB_LOG("ASINK: Create texture queues: %dx%d", renderWidth, renderHeight);
+    VRB_LOG("Create texture queues: %dx%d", renderWidth, renderHeight);
     leftTextureQueue = WVR_ObtainTextureQueue(WVR_TextureTarget_2D, WVR_TextureFormat_RGBA, WVR_TextureType_UnsignedByte, renderWidth, renderHeight, 0);
     FillFBOQueue(leftTextureQueue, leftFBOQueue);
     rightTextureQueue = WVR_ObtainTextureQueue(WVR_TextureTarget_2D, WVR_TextureFormat_RGBA, WVR_TextureType_UnsignedByte, renderWidth, renderHeight, 0);
@@ -267,7 +260,6 @@ struct DeviceDelegateWaveVR::State {
   }
 
   void ReleaseTextureQueues() {
-    VRB_LOG("ASINK:  ReleaseTextureQueues");
     if (leftTextureQueue) {
       WVR_ReleaseTextureQueue(leftTextureQueue);
       leftTextureQueue = nullptr;
@@ -305,7 +297,6 @@ struct DeviceDelegateWaveVR::State {
       VRB_ERROR("Failed to create controller. No ControllerDelegate has been set.");
       return;
     }
-    VRB_LOG("ASINK:  CreateController");
     vrb::Matrix beamTransform(vrb::Matrix::Identity());
     if (aController.is6DoF) {
       beamTransform.TranslateInPlace(vrb::Vector(0.0f, 0.01f, -0.05f));
@@ -620,9 +611,7 @@ DeviceDelegateWaveVR::GetRenderMode() {
 void
 DeviceDelegateWaveVR::RegisterImmersiveDisplay(ImmersiveDisplayPtr aDisplay) {
   m.immersiveDisplay = std::move(aDisplay);
-  VRB_LOG("ASINK:  RegisterImmersiveDisplay 1");
   if (!m.immersiveDisplay) {
-    VRB_LOG("ASINK:  RegisterImmersiveDisplay not an immersive display");
     return;
   }
 
@@ -635,7 +624,6 @@ DeviceDelegateWaveVR::RegisterImmersiveDisplay(ImmersiveDisplayPtr aDisplay) {
   } else {
     flags |= device::PositionEmulated;
   }
-  VRB_LOG("ASINK:  RegisterImmersiveDisplay 2 ");
   m.immersiveDisplay->SetCapabilityFlags(flags);
   m.immersiveDisplay->SetEyeResolution(m.renderWidth, m.renderHeight);
   m.UpdateStandingMatrix();
@@ -651,7 +639,6 @@ DeviceDelegateWaveVR::SetImmersiveSize(const uint32_t aEyeWidth, const uint32_t 
 
   uint32_t targetWidth = m.renderWidth;
   uint32_t targetHeight = m.renderHeight;
-  VRB_LOG("ASINK:  SetImmersiveSize");
   DeviceUtils::GetTargetImmersiveSize(aEyeWidth, aEyeHeight, recommendedWidth, recommendedHeight, targetWidth, targetHeight);
 
   if (targetWidth != m.renderWidth || targetHeight != m.renderHeight) {
@@ -892,9 +879,6 @@ DeviceDelegateWaveVR::StartFrame(const FramePrediction aPrediction) {
     m.rightFBOIndex = WVR_GetAvailableTextureIndex(m.rightTextureQueue);
   }
 
-    if(m.immersiveDisplay){
-        VRB_LOG("ASINK: start frame with immersive display");
-    }
   // Update cameras
   WVR_GetSyncPose(WVR_PoseOriginModel_OriginOnHead, m.devicePairs, WVR_DEVICE_COUNT_LEVEL_1);
   vrb::Matrix hmd = vrb::Matrix::Identity();
